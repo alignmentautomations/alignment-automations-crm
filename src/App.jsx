@@ -47,6 +47,11 @@ const DEFAULT_TASKS = [
 
 // ─── Supabase ─────────────────────────────────────────────────────────────────
 
+
+// ─── Password ─────────────────────────────────────────────────────────────────
+
+const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || "changeme";
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://iwkdyvbxsndpwrccqvkb.supabase.co";
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml3a2R5dmJ4c25kcHdyY2NxdmtiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMTM3MjcsImV4cCI6MjA4NjY4OTcyN30.iISr7pFQmDIcxJeWdagMPbSQL1WOrjK2cPloAql0tbs";
 
@@ -464,6 +469,33 @@ const css = `
   .task-progress-label { font-size: 10px; color: #475569; margin-bottom: 6px; }
 
   .loading { display: flex; align-items: center; justify-content: center; height: 100%; color: #475569; font-size: 14px; }
+  /* ── Simple Login ── */
+  .login-page {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; background: #0B1121; padding: 20px;
+  }
+  .login-card {
+    background: #161f32; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px; padding: 40px; width: 100%; max-width: 380px;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.5);
+  }
+  .login-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+  .login-logo img { width: 36px; height: 36px; }
+  .login-logo-text { line-height: 1.2; }
+  .login-logo-name { font-size: 14px; font-weight: 700; color: #f8fafc; }
+  .login-title { font-size: 20px; font-weight: 700; color: #f8fafc; margin-bottom: 24px; }
+  .login-form { display: flex; flex-direction: column; gap: 14px; }
+  .login-error {
+    padding: 10px 12px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 7px; font-size: 12px; color: #ef4444; margin-bottom: 8px;
+  }
+  .btn-login {
+    padding: 11px; background: #2563eb; color: white; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600;
+    font-family: 'Manrope', sans-serif; cursor: pointer; transition: background 0.15s;
+  }
+  .btn-login:hover { background: #3b82f6; }
+  .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
   /* ── Logout button ── */
   .logout-btn {
     display: flex; align-items: center; gap: 7px; width: 100%;
@@ -985,9 +1017,61 @@ function PipelineView({ clinics, onSelect, onStatusChange }) {
   );
 }
 
+// ─── Simple Login ─────────────────────────────────────────────────────────────
+
+function SimpleLogin({ onLogin }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (password === APP_PASSWORD) {
+      localStorage.setItem("aa_auth", "1");
+      onLogin();
+    } else {
+      setError("Incorrect password");
+      setPassword("");
+    }
+  };
+
+  return (
+    <>
+      <style>{css}</style>
+      <div className="login-page">
+        <div className="login-card">
+          <div className="login-logo">
+            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAJCSURBVHgB7VZNbtNAFH4zThM3IaQSC7oBNhwBcQS6YUNZVKq6K0dod+0JoEfoCbpBQqK0G3bsOELgCLABiQ0SOyFO7Bl4L3bipDh/TRBCfJIVz+N5b75582bGBv5jWPgHsLW1tQoAawCwBgAFBuUYAI4opY/L5fKn/wUA4KdSqVSo1+sfGGM2pdS+2tHR0b21tbU6AOzv79+wLOsOY2yTUrpljHlL07QUpmnaBIB9Qsi2Fqu7BPguXLlyZR0ALm5vb28zxu4LIbRer/cRb45GoxNCyHNCyHNCiAkAGyL6uLu7e/P4+PgDY+yOlPIj13USxwkBwBdCXKs6jvM+iqIX586du1qr1T4JIQ6993c9z3vled4LrfWJ53nP8P17rfVz13Wf+r7/1HGch5ubmydSyjul0s9Go/EqDMN3Usq7aZp+6Ha7jwzDuKq1fiiEeIJ34TiO32KQR1LK+9gLXMd13Ec4KY+CIHgM52CMvcTJuhuG4VtM+AgAlpaWVur1+kOl1H2s/TullA+EELcopfeazebdMAzfwRkQ+xFPKfVRKfUJfwVBcBvLdQ/f+b5/q9lsPsA+PIUzYOnSpRUhhIfeP9Fa31VKPQJAO47zPq6maboP75BzU0q5L6V8gPUfhGF4s9FovMaeHMCp0e/3X+P5H2J3VCqVC0EQvMYSnrqmado+PDz8CAC2bdtXr169FkXRz263+zOO4x+4LpfLH1qt1rdWq/Wt0+n8SCYH13RarVZ/fn7+B66zJ06OOI7bxWLxZxzHf46xhTPgbzVMZ/gLMI+h5JLSssEAAAAASUVORK5CYII=" alt="Logo" />
+            <div className="login-logo-text">
+              <div className="login-logo-name">Alignment</div>
+              <div className="login-logo-name">Automations</div>
+            </div>
+          </div>
+          <div className="login-title">Enter Password</div>
+          <form className="login-form" onSubmit={handleSubmit}>
+            {error && <div className="login-error">{error}</div>}
+            <div className="form-group">
+              <input 
+                className="form-input" 
+                type="password" 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+                placeholder="Password" 
+                required 
+                autoFocus 
+              />
+            </div>
+            <button className="btn-login" type="submit">Sign in</button>
+          </form>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const [authed, setAuthed] = useState(() => localStorage.getItem("aa_auth") === "1");
   const [clinics, setClinics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState("dashboard");
@@ -996,10 +1080,11 @@ export default function App() {
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
+    if (!authed) { setLoading(false); return; }
     supa.getAll()
       .then(data => { setClinics(data || []); setLoading(false); })
       .catch(() => { setClinics([]); setLoading(false); });
-  }, []);
+  }, [authed]);
 
   const showToast = (msg) => setToast(msg);
 
@@ -1039,7 +1124,14 @@ export default function App() {
     try { await supa.update(updated.id, { tasks: updated.tasks }); } catch (_) {}
   }, []);
 
+  if (!authed) return <SimpleLogin onLogin={() => setAuthed(true)} />;
   if (loading) return <><style>{css}</style><div className="app"><div className="loading">Loading…</div></div></>;
+
+  const handleLogout = () => {
+    localStorage.removeItem("aa_auth");
+    setAuthed(false);
+    setClinics([]);
+  };
 
   return (
     <>
@@ -1063,14 +1155,14 @@ export default function App() {
               <span className="nav-icon"><Icon.Pipeline /></span>Pipeline
             </button>
 
-            <a className="logout-btn" href="https://alignmentautomations.cloudflareaccess.com/cdn-cgi/access/logout">
+            <button className="logout-btn" onClick={handleLogout}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
                 <polyline points="16 17 21 12 16 7"/>
                 <line x1="21" y1="12" x2="9" y2="12"/>
               </svg>
               Sign out
-            </a>
+            </button>
           </nav>
         </aside>
 
