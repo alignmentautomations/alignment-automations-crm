@@ -464,6 +464,15 @@ const css = `
   .task-progress-label { font-size: 10px; color: #475569; margin-bottom: 6px; }
 
   .loading { display: flex; align-items: center; justify-content: center; height: 100%; color: #475569; font-size: 14px; }
+  /* ── Logout button ── */
+  .logout-btn {
+    display: flex; align-items: center; gap: 7px; width: 100%;
+    padding: 9px 10px; margin-top: auto; border: none; background: none;
+    color: #475569; font-size: 12px; font-weight: 500; font-family: 'Manrope', sans-serif;
+    cursor: pointer; border-radius: 7px; transition: all 0.15s; text-align: left;
+    text-decoration: none;
+  }
+  .logout-btn:hover { color: #ef4444; background: rgba(239,68,68,0.08); }
 
   /* ── FAB (mobile add button) ── */
   .fab {
@@ -1053,6 +1062,15 @@ export default function App() {
             <button className={"nav-item" + (page === "pipeline" ? " active" : "")} onClick={() => setPage("pipeline")}>
               <span className="nav-icon"><Icon.Pipeline /></span>Pipeline
             </button>
+
+            <a className="logout-btn" href="/cdn-cgi/access/logout">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+              Sign out
+            </a>
           </nav>
         </aside>
 
