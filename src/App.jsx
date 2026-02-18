@@ -919,9 +919,9 @@ function DashboardView({ clinics, onAdd, onEdit, onDelete, onSelect, onStatusCha
                   <div className="clinic-list-card-sub">{c.contact_name || "—"}</div>
                 </div>
                 <div className="clinic-list-card-right">
-                  <span className="status-badge-readonly" style={{ background: sc.bg, color: sc.text, borderColor: sc.border }}>
-                    <span className="status-dot" style={{ background: dot }} />{stageLabel(c.status)}
-                  </span>
+                  <div onClick={e => e.stopPropagation()}>
+                    <StatusDropdown status={c.status} onChange={(newStatus) => onStatusChange(c.id, newStatus)} />
+                  </div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button className="btn-ghost" onClick={e => { e.stopPropagation(); onEdit(c); }} style={{ padding: "4px 8px", fontSize: 11 }}><Icon.Edit /></button>
                     <button className="btn-danger" onClick={e => { e.stopPropagation(); onDelete(c.id); }}><Icon.Trash /></button>
@@ -1000,6 +1000,9 @@ function PipelineView({ clinics, onSelect, onStatusChange }) {
                             <div className="card-name">{c.name}</div>
                             <div className="card-contact">{c.contact_name || "—"}</div>
                             <div className="card-date">{formatDate(c.start_date)}</div>
+                            <div onClick={e => e.stopPropagation()} style={{ marginTop: 6 }}>
+                              <StatusDropdown status={c.status} onChange={(newStatus) => onStatusChange(c.id, newStatus)} />
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -1183,6 +1186,14 @@ export default function App() {
             <button className={"bottom-nav-item" + (page === "pipeline" ? " active" : "")} onClick={() => setPage("pipeline")}>
               <Icon.Pipeline /><span>Pipeline</span>
             </button>
+            <button className="bottom-nav-item" onClick={handleLogout}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+              <span>Sign out</span>
+            </button>
           </div>
         </nav>
 
@@ -1196,3 +1207,4 @@ export default function App() {
     </>
   );
 }
+
