@@ -518,6 +518,12 @@ const css = `
   .fab:active { background: #3b82f6; }
 
   /* ── Responsive breakpoints ── */
+
+  .pipeline-card-status-mobile { display: none; }
+
+  @media (max-width: 768px) {
+    .pipeline-card-status-mobile { display: block; }
+  }
   @media (max-width: 768px) {
     .sidebar { display: none; }
     .bottom-nav { display: block; }
@@ -1000,7 +1006,7 @@ function PipelineView({ clinics, onSelect, onStatusChange }) {
                             <div className="card-name">{c.name}</div>
                             <div className="card-contact">{c.contact_name || "—"}</div>
                             <div className="card-date">{formatDate(c.start_date)}</div>
-                            <div onClick={e => e.stopPropagation()} style={{ marginTop: 6 }}>
+                            <div onClick={e => e.stopPropagation()} style={{ marginTop: 6 }} className="pipeline-card-status-mobile">
                               <StatusDropdown status={c.status} onChange={(newStatus) => onStatusChange(c.id, newStatus)} />
                             </div>
                           </div>
@@ -1207,4 +1213,3 @@ export default function App() {
     </>
   );
 }
-
