@@ -14,3 +14,11 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+## Running locally (including secure mode)
+
+- Standard dev server: `npm run dev`
+- HTTPS dev server (for browsers/devices that require a secure origin): `npm run dev:secure`
+
+If your browser still shows a security warning in secure mode, that is expected for local self-signed certs. Use the browser's **Advanced -> Proceed** option for local testing.
+
