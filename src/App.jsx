@@ -34,7 +34,7 @@ const STAGE_DOT_COLOR = {
   testing: "#f97316", live: "#10b981", monthly_support: "#06b6d4", closed_lost: "#ef4444",
 };
 
-const DEFAULT_TASKS = [
+const LEGACY_TASKS = [
   "Confirm intake questions + branding",
   "Configure intake form",
   "Setup automation flows",
@@ -44,6 +44,39 @@ const DEFAULT_TASKS = [
   "Go live",
   "Post-launch check-in",
 ];
+
+const DETAILED_TASKS = [
+  "Collect kickoff details (brand voice, services, locations, hours)",
+  "Confirm offer focus + conversion goals",
+  "Gather credentials + access (domain, forms, CRM, calendars)",
+  "Finalize intake form fields + required validations",
+  "Map lead routing logic (new lead, existing patient, spam)",
+  "Configure intake form + hidden source tracking fields",
+  "Set up confirmation page + tracking events",
+  "Build email confirmation sequence",
+  "Build SMS confirmation sequence",
+  "Set up missed-call text-back + voicemail handling",
+  "Configure appointment reminder cadence",
+  "Set up no-show follow-up sequence",
+  "Create reactivation / nurture follow-up sequence",
+  "Set up pipeline stages + ownership rules",
+  "Configure internal notifications for new leads",
+  "Connect calendars + validate booking windows",
+  "Run end-to-end QA for web form submissions",
+  "Run end-to-end QA for call / text flows",
+  "QA edge cases (duplicates, bad numbers, opt-out handling)",
+  "Prepare staff SOP + escalation rules",
+  "Staff training session + handoff walkthrough",
+  "Launch checklist sign-off",
+  "Go live + monitor first 24 hours",
+  "48-hour post-launch audit + fixes",
+  "7-day performance check-in + optimizations",
+];
+
+const ONBOARDING_TEMPLATES = {
+  classic: LEGACY_TASKS,
+  detailed: DETAILED_TASKS,
+};
 
 // ─── Supabase ─────────────────────────────────────────────────────────────────
 
@@ -702,6 +735,7 @@ const BLANK = { name: "", contact_name: "", contact_email: "", contact_phone: ""
 
 function ClinicModal({ clinic, onSave, onClose }) {
   const [form, setForm] = useState(clinic ? { ...clinic } : { ...BLANK });
+  const [checklistTemplate, setChecklistTemplate] = useState("detailed");
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -747,10 +781,19 @@ function ClinicModal({ clinic, onSave, onClose }) {
               <input type="date" className="form-input" value={form.start_date} onChange={e => set("start_date", e.target.value)} />
             </div>
           </div>
+          {!clinic && (
+            <div className="form-group">
+              <label className="form-label">Onboarding Checklist</label>
+              <select className="form-select" value={checklistTemplate} onChange={(e) => setChecklistTemplate(e.target.value)}>
+                <option value="detailed">Detailed (recommended)</option>
+                <option value="classic">Classic (current version)</option>
+              </select>
+            </div>
+          )}
         </div>
         <div className="modal-footer">
           <button className="btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" onClick={() => { if (form.name.trim()) onSave(form); }}>{clinic ? "Save Changes" : "Add Clinic"}</button>
+          <button className="btn-primary" onClick={() => { if (form.name.trim()) onSave({ ...form, _checklistTemplate: checklistTemplate }); }}>{clinic ? "Save Changes" : "Add Clinic"}</button>
         </div>
       </div>
     </div>
@@ -1098,7 +1141,9 @@ export default function App() {
 
   const handleSave = useCallback(async (form) => {
     if (modal === "add") {
-      const newClinic = { ...form, id: uid(), created_at: new Date().toISOString(), tasks: DEFAULT_TASKS.map(name => ({ id: uid(), name, done: false })) };
+      const template = ONBOARDING_TEMPLATES[form._checklistTemplate] || DETAILED_TASKS;
+      const { _checklistTemplate, ...clinicForm } = form;
+      const newClinic = { ...clinicForm, id: uid(), created_at: new Date().toISOString(), tasks: template.map(name => ({ id: uid(), name, done: false })) };
       setClinics(prev => [newClinic, ...prev]);
       try { await supa.upsert(newClinic); } catch (_) {}
       showToast("Clinic added");
