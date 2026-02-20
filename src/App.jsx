@@ -34,16 +34,52 @@ const STAGE_DOT_COLOR = {
   testing: "#f97316", live: "#10b981", monthly_support: "#06b6d4", closed_lost: "#ef4444",
 };
 
-const DEFAULT_TASKS = [
-  "Confirm intake questions + branding",
-  "Configure intake form",
-  "Setup automation flows",
-  "QA intake form",
-  "QA automation flows",
-  "Train clinic staff",
-  "Go live",
-  "Post-launch check-in",
-];
+const DEFAULT_TASKS = {
+  alignment: [
+    // Strategy
+    { name: "Confirm intake flow structure", done: false, section: "Strategy" },
+    { name: "Confirm booking process logic", done: false, section: "Strategy" },
+    { name: "Finalize intake questions", done: false, section: "Strategy" },
+    { name: "Draft confirmation email copy", done: false, section: "Strategy" },
+    // Build
+    { name: "Create intake form", done: false, section: "Build" },
+    { name: "Configure form validation", done: false, section: "Build" },
+    { name: "Connect Zapier trigger", done: false, section: "Build" },
+    { name: "Build form → auto email automation", done: false, section: "Build" },
+    { name: "Insert booking link into confirmation email", done: false, section: "Build" },
+    { name: "Configure internal notification email", done: false, section: "Build" },
+    { name: "Connect lead logging (Sheet / CRM)", done: false, section: "Build" },
+    // QA
+    { name: "Test form submission (desktop)", done: false, section: "QA" },
+    { name: "Test form submission (mobile)", done: false, section: "QA" },
+    { name: "Confirm email sends instantly", done: false, section: "QA" },
+    { name: "Confirm booking link works", done: false, section: "QA" },
+    { name: "Confirm appointment appears on calendar", done: false, section: "QA" },
+    { name: "Confirm internal notification received", done: false, section: "QA" },
+    // Launch
+    { name: "Deliver live links to clinic", done: false, section: "Launch" },
+    { name: "Conduct system walkthrough", done: false, section: "Launch" },
+    { name: "Confirm automations are active", done: false, section: "Launch" },
+    { name: "Mark clinic 'Live'", done: false, section: "Launch" },
+  ],
+  clinic: [
+    // Accounts & Access
+    { name: "Provide master email", done: false, section: "Accounts & Access" },
+    { name: "Create Calendly account", done: false, section: "Accounts & Access" },
+    { name: "Connect calendar to Calendly", done: false, section: "Accounts & Access" },
+    { name: "Create Zapier account", done: false, section: "Accounts & Access" },
+    { name: "Grant Alignment Automations administrator access", done: false, section: "Accounts & Access" },
+    { name: "Confirm timezone & availability schedule", done: false, section: "Accounts & Access" },
+    // Approvals
+    { name: "Approve intake questions", done: false, section: "Approvals" },
+    { name: "Approve confirmation email copy", done: false, section: "Approvals" },
+    { name: "Confirm notification email address", done: false, section: "Approvals" },
+    // Post-Launch
+    { name: "Monitor incoming leads", done: false, section: "Post-Launch" },
+    { name: "Update availability as needed", done: false, section: "Post-Launch" },
+    { name: "Attend follow-up check-in", done: false, section: "Post-Launch" },
+  ],
+};
 
 // ─── Supabase ─────────────────────────────────────────────────────────────────
 
@@ -760,10 +796,14 @@ function ClinicModal({ clinic, onSave, onClose }) {
 // ─── Detail Panel ─────────────────────────────────────────────────────────────
 
 function DetailPanel({ clinic, onClose, onUpdate }) {
-  const [newTask, setNewTask] = useState("");
-  const tasks = clinic.tasks || [];
-  const done = tasks.filter(t => t.done).length;
-  const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+  const [newAlignmentTask, setNewAlignmentTask] = useState("");
+  const [newClinicTask, setNewClinicTask] = useState("");
+  
+  const alignmentTasks = clinic.alignmentTasks || [];
+  const clinicTasks = clinic.clinicTasks || [];
+  const allTasks = [...alignmentTasks, ...clinicTasks];
+  const done = allTasks.filter(t => t.done).length;
+  const pct = allTasks.length ? Math.round((done / allTasks.length) * 100) : 0;
 
   return (
     <div className="detail-overlay" onClick={onClose}>
@@ -790,30 +830,78 @@ function DetailPanel({ clinic, onClose, onUpdate }) {
               {clinic.website && <div style={{ gridColumn: "span 2" }}><div className="info-label">Website</div><div className="info-value" style={{ fontSize: 12 }}>{clinic.website}</div></div>}
             </div>
           </div>
+          
           <div>
-            <div className="detail-section-title">Onboarding Tasks ({done}/{tasks.length})</div>
-            {tasks.length > 0 && (
+            <div className="detail-section-title">Onboarding Progress ({done}/{allTasks.length})</div>
+            {allTasks.length > 0 && (
               <><div className="task-progress-label">{pct}% complete</div>
               <div className="task-progress"><div className="task-progress-bar" style={{ width: pct + "%" }} /></div></>
             )}
-            <div className="task-list">
-              {tasks.map(t => (
-                <div key={t.id} className="task-item">
-                  <div className={"task-checkbox" + (t.done ? " done" : "")}
-                    onClick={() => onUpdate({ ...clinic, tasks: tasks.map(x => x.id === t.id ? { ...x, done: !x.done } : x) })}>
-                    {t.done && <Icon.Check />}
-                  </div>
-                  <span className={"task-name" + (t.done ? " done" : "")}>{t.name}</span>
-                  <button className="task-delete" onClick={() => onUpdate({ ...clinic, tasks: tasks.filter(x => x.id !== t.id) })}>✕</button>
-                </div>
-              ))}
+          </div>
+
+          <div>
+            <div className="detail-section-title" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 16 }}>
+              <span style={{ fontSize: 14 }}>🧑‍💻</span>
+              Alignment Automations
             </div>
-            <div className="add-task-row" style={{ marginTop: 8 }}>
-              <input className="add-task-input" placeholder="Add a task…" value={newTask}
-                onChange={e => setNewTask(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && newTask.trim()) { onUpdate({ ...clinic, tasks: [...tasks, { id: uid(), name: newTask.trim(), done: false }] }); setNewTask(""); } }} />
+            <div className="task-list">
+              {alignmentTasks.map((t, idx) => {
+                const prevSection = idx > 0 ? alignmentTasks[idx - 1].section : null;
+                const showSection = t.section && t.section !== prevSection;
+                return (
+                  <div key={t.id}>
+                    {showSection && <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em", marginTop: idx > 0 ? 12 : 0, marginBottom: 6 }}>{t.section}</div>}
+                    <div className="task-item">
+                      <div className={"task-checkbox" + (t.done ? " done" : "")}
+                        onClick={() => onUpdate({ ...clinic, alignmentTasks: alignmentTasks.map(x => x.id === t.id ? { ...x, done: !x.done } : x) })}>
+                        {t.done && <Icon.Check />}
+                      </div>
+                      <span className={"task-name" + (t.done ? " done" : "")}>{t.name}</span>
+                      <button className="task-delete" onClick={() => onUpdate({ ...clinic, alignmentTasks: alignmentTasks.filter(x => x.id !== t.id) })}>✕</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="add-task-row">
+              <input className="add-task-input" placeholder="Add Alignment task…" value={newAlignmentTask}
+                onChange={e => setNewAlignmentTask(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && newAlignmentTask.trim()) { onUpdate({ ...clinic, alignmentTasks: [...alignmentTasks, { id: uid(), name: newAlignmentTask.trim(), done: false }] }); setNewAlignmentTask(""); } }} />
               <button className="btn-primary" style={{ padding: "8px 12px", fontSize: 12 }}
-                onClick={() => { if (newTask.trim()) { onUpdate({ ...clinic, tasks: [...tasks, { id: uid(), name: newTask.trim(), done: false }] }); setNewTask(""); } }}>Add</button>
+                onClick={() => { if (newAlignmentTask.trim()) { onUpdate({ ...clinic, alignmentTasks: [...alignmentTasks, { id: uid(), name: newAlignmentTask.trim(), done: false }] }); setNewAlignmentTask(""); } }}>Add</button>
+            </div>
+          </div>
+
+          <div>
+            <div className="detail-section-title" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 16 }}>
+              <span style={{ fontSize: 14 }}>🏥</span>
+              Clinic
+            </div>
+            <div className="task-list">
+              {clinicTasks.map((t, idx) => {
+                const prevSection = idx > 0 ? clinicTasks[idx - 1].section : null;
+                const showSection = t.section && t.section !== prevSection;
+                return (
+                  <div key={t.id}>
+                    {showSection && <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em", marginTop: idx > 0 ? 12 : 0, marginBottom: 6 }}>{t.section}</div>}
+                    <div className="task-item">
+                      <div className={"task-checkbox" + (t.done ? " done" : "")}
+                        onClick={() => onUpdate({ ...clinic, clinicTasks: clinicTasks.map(x => x.id === t.id ? { ...x, done: !x.done } : x) })}>
+                        {t.done && <Icon.Check />}
+                      </div>
+                      <span className={"task-name" + (t.done ? " done" : "")}>{t.name}</span>
+                      <button className="task-delete" onClick={() => onUpdate({ ...clinic, clinicTasks: clinicTasks.filter(x => x.id !== t.id) })}>✕</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="add-task-row">
+              <input className="add-task-input" placeholder="Add Clinic task…" value={newClinicTask}
+                onChange={e => setNewClinicTask(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && newClinicTask.trim()) { onUpdate({ ...clinic, clinicTasks: [...clinicTasks, { id: uid(), name: newClinicTask.trim(), done: false }] }); setNewClinicTask(""); } }} />
+              <button className="btn-primary" style={{ padding: "8px 12px", fontSize: 12 }}
+                onClick={() => { if (newClinicTask.trim()) { onUpdate({ ...clinic, clinicTasks: [...clinicTasks, { id: uid(), name: newClinicTask.trim(), done: false }] }); setNewClinicTask(""); } }}>Add</button>
             </div>
           </div>
         </div>
@@ -1098,7 +1186,9 @@ export default function App() {
 
   const handleSave = useCallback(async (form) => {
     if (modal === "add") {
-      const newClinic = { ...form, id: uid(), created_at: new Date().toISOString(), tasks: DEFAULT_TASKS.map(name => ({ id: uid(), name, done: false })) };
+      const alignmentTasks = DEFAULT_TASKS.alignment.map(t => ({ ...t, id: uid() }));
+      const clinicTasks = DEFAULT_TASKS.clinic.map(t => ({ ...t, id: uid() }));
+      const newClinic = { ...form, id: uid(), created_at: new Date().toISOString(), alignmentTasks, clinicTasks };
       setClinics(prev => [newClinic, ...prev]);
       try { await supa.upsert(newClinic); } catch (_) {}
       showToast("Clinic added");
@@ -1122,7 +1212,12 @@ export default function App() {
   const handleUpdate = useCallback(async (updated) => {
     setClinics(prev => prev.map(c => c.id === updated.id ? updated : c));
     setSelected(updated);
-    try { await supa.update(updated.id, { tasks: updated.tasks }); } catch (_) {}
+    try { 
+      await supa.update(updated.id, { 
+        alignmentTasks: updated.alignmentTasks || [],
+        clinicTasks: updated.clinicTasks || []
+      }); 
+    } catch (_) {}
   }, []);
 
   if (!authed) return <SimpleLogin onLogin={() => setAuthed(true)} />;
