@@ -798,12 +798,19 @@ function ClinicModal({ clinic, onSave, onClose }) {
 function DetailPanel({ clinic, onClose, onUpdate }) {
   const [newAlignmentTask, setNewAlignmentTask] = useState("");
   const [newClinicTask, setNewClinicTask] = useState("");
+  const [expandedSections, setExpandedSections] = useState({});
   
   const alignmentTasks = clinic.alignmentTasks || [];
   const clinicTasks = clinic.clinicTasks || [];
   const allTasks = [...alignmentTasks, ...clinicTasks];
   const done = allTasks.filter(t => t.done).length;
   const pct = allTasks.length ? Math.round((done / allTasks.length) * 100) : 0;
+  
+  const toggleSection = (key) => setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
+  
+  // Get unique sections for each list
+  const alignmentSections = [...new Set(alignmentTasks.map(t => t.section).filter(Boolean))];
+  const clinicSections = [...new Set(clinicTasks.map(t => t.section).filter(Boolean))];
 
   return (
     <div className="detail-overlay" onClick={onClose}>
@@ -844,21 +851,39 @@ function DetailPanel({ clinic, onClose, onUpdate }) {
               <span style={{ fontSize: 14 }}>🧑‍💻</span>
               Alignment Automations
             </div>
-            <div className="task-list">
-              {alignmentTasks.map((t, idx) => {
-                const prevSection = idx > 0 ? alignmentTasks[idx - 1].section : null;
-                const showSection = t.section && t.section !== prevSection;
+            <div>
+              {alignmentSections.map(section => {
+                const sectionTasks = alignmentTasks.filter(t => t.section === section);
+                const sectionDone = sectionTasks.filter(t => t.done).length;
+                const isExpanded = expandedSections['alignment-' + section];
                 return (
-                  <div key={t.id}>
-                    {showSection && <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em", marginTop: idx > 0 ? 12 : 0, marginBottom: 6 }}>{t.section}</div>}
-                    <div className="task-item">
-                      <div className={"task-checkbox" + (t.done ? " done" : "")}
-                        onClick={() => onUpdate({ ...clinic, alignmentTasks: alignmentTasks.map(x => x.id === t.id ? { ...x, done: !x.done } : x) })}>
-                        {t.done && <Icon.Check />}
-                      </div>
-                      <span className={"task-name" + (t.done ? " done" : "")}>{t.name}</span>
-                      <button className="task-delete" onClick={() => onUpdate({ ...clinic, alignmentTasks: alignmentTasks.filter(x => x.id !== t.id) })}>✕</button>
+                  <div key={section} style={{ marginBottom: 12 }}>
+                    <div 
+                      onClick={() => toggleSection('alignment-' + section)}
+                      style={{ 
+                        display: "flex", alignItems: "center", gap: 8, 
+                        padding: "8px 10px", background: "rgba(11,17,33,0.6)", 
+                        borderRadius: 6, cursor: "pointer", userSelect: "none"
+                      }}
+                    >
+                      <span style={{ transform: isExpanded ? "rotate(90deg)" : "none", transition: "transform 0.2s", fontSize: 10, color: "#64748b" }}>▶</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#cbd5e1", textTransform: "uppercase", letterSpacing: "0.08em", flex: 1 }}>{section}</span>
+                      <span style={{ fontSize: 10, color: "#64748b", fontFamily: "'JetBrains Mono', monospace" }}>{sectionDone}/{sectionTasks.length}</span>
                     </div>
+                    {isExpanded && (
+                      <div className="task-list" style={{ marginTop: 6 }}>
+                        {sectionTasks.map(t => (
+                          <div key={t.id} className="task-item">
+                            <div className={"task-checkbox" + (t.done ? " done" : "")}
+                              onClick={() => onUpdate({ ...clinic, alignmentTasks: alignmentTasks.map(x => x.id === t.id ? { ...x, done: !x.done } : x) })}>
+                              {t.done && <Icon.Check />}
+                            </div>
+                            <span className={"task-name" + (t.done ? " done" : "")}>{t.name}</span>
+                            <button className="task-delete" onClick={() => onUpdate({ ...clinic, alignmentTasks: alignmentTasks.filter(x => x.id !== t.id) })}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -877,21 +902,39 @@ function DetailPanel({ clinic, onClose, onUpdate }) {
               <span style={{ fontSize: 14 }}>🏥</span>
               Clinic
             </div>
-            <div className="task-list">
-              {clinicTasks.map((t, idx) => {
-                const prevSection = idx > 0 ? clinicTasks[idx - 1].section : null;
-                const showSection = t.section && t.section !== prevSection;
+            <div>
+              {clinicSections.map(section => {
+                const sectionTasks = clinicTasks.filter(t => t.section === section);
+                const sectionDone = sectionTasks.filter(t => t.done).length;
+                const isExpanded = expandedSections['clinic-' + section];
                 return (
-                  <div key={t.id}>
-                    {showSection && <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em", marginTop: idx > 0 ? 12 : 0, marginBottom: 6 }}>{t.section}</div>}
-                    <div className="task-item">
-                      <div className={"task-checkbox" + (t.done ? " done" : "")}
-                        onClick={() => onUpdate({ ...clinic, clinicTasks: clinicTasks.map(x => x.id === t.id ? { ...x, done: !x.done } : x) })}>
-                        {t.done && <Icon.Check />}
-                      </div>
-                      <span className={"task-name" + (t.done ? " done" : "")}>{t.name}</span>
-                      <button className="task-delete" onClick={() => onUpdate({ ...clinic, clinicTasks: clinicTasks.filter(x => x.id !== t.id) })}>✕</button>
+                  <div key={section} style={{ marginBottom: 12 }}>
+                    <div 
+                      onClick={() => toggleSection('clinic-' + section)}
+                      style={{ 
+                        display: "flex", alignItems: "center", gap: 8, 
+                        padding: "8px 10px", background: "rgba(11,17,33,0.6)", 
+                        borderRadius: 6, cursor: "pointer", userSelect: "none"
+                      }}
+                    >
+                      <span style={{ transform: isExpanded ? "rotate(90deg)" : "none", transition: "transform 0.2s", fontSize: 10, color: "#64748b" }}>▶</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#cbd5e1", textTransform: "uppercase", letterSpacing: "0.08em", flex: 1 }}>{section}</span>
+                      <span style={{ fontSize: 10, color: "#64748b", fontFamily: "'JetBrains Mono', monospace" }}>{sectionDone}/{sectionTasks.length}</span>
                     </div>
+                    {isExpanded && (
+                      <div className="task-list" style={{ marginTop: 6 }}>
+                        {sectionTasks.map(t => (
+                          <div key={t.id} className="task-item">
+                            <div className={"task-checkbox" + (t.done ? " done" : "")}
+                              onClick={() => onUpdate({ ...clinic, clinicTasks: clinicTasks.map(x => x.id === t.id ? { ...x, done: !x.done } : x) })}>
+                              {t.done && <Icon.Check />}
+                            </div>
+                            <span className={"task-name" + (t.done ? " done" : "")}>{t.name}</span>
+                            <button className="task-delete" onClick={() => onUpdate({ ...clinic, clinicTasks: clinicTasks.filter(x => x.id !== t.id) })}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
