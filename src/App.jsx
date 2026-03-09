@@ -81,6 +81,23 @@ const DEFAULT_TASKS = {
   ],
 };
 
+
+// ─── Packages ─────────────────────────────────────────────────────────────────
+
+const PACKAGES = {
+  individual: [
+    "Automation Core",
+    "Intake Foundation",
+    "Call Protection",
+    "Call Capture",
+  ],
+  bundles: [
+    "Core + Call Protection",
+    "Foundation + Core",
+    "Full Intake Infrastructure",
+  ],
+};
+
 // ─── Supabase ─────────────────────────────────────────────────────────────────
 
 
@@ -88,45 +105,40 @@ const DEFAULT_TASKS = {
 
 const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || "changeme";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://iwkdyvbxsndpwrccqvkb.supabase.co";
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml3a2R5dmJ4c25kcHdyY2NxdmtiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMTM3MjcsImV4cCI6MjA4NjY4OTcyN30.iISr7pFQmDIcxJeWdagMPbSQL1WOrjK2cPloAql0tbs";
+const API_BASE = "/api";
 
-const supa = {
-  async query(path, options = {}) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: options.prefer || "",
-      },
-      ...options,
-    });
-    if (!res.ok) throw new Error(await res.text());
-    const text = await res.text();
-    return text ? JSON.parse(text) : null;
-  },
+const db = {
   async getAll() {
-    return await this.query("clinics?order=created_at.desc");
+    const res = await fetch(`${API_BASE}/clinics`);
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
   },
-  async upsert(clinic) {
-    return await this.query("clinics", {
+  async create(clinic) {
+    const res = await fetch(`${API_BASE}/clinics`, {
       method: "POST",
-      prefer: "resolution=merge-duplicates,return=representation",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(clinic),
     });
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
   },
   async update(id, patch) {
-    return await this.query(`clinics?id=eq.${id}`, {
+    const res = await fetch(`${API_BASE}/clinics/${id}`, {
       method: "PATCH",
-      prefer: "return=representation",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
     });
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
   },
   async delete(id) {
-    return await this.query(`clinics?id=eq.${id}`, { method: "DELETE" });
+    const res = await fetch(`${API_BASE}/clinics/${id}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return { success: true };
   },
-};
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -771,6 +783,21 @@ function ClinicModal({ clinic, onSave, onClose }) {
               <input className="form-input" value={form.website} onChange={e => set("website", e.target.value)} placeholder="https://clinic.com" />
             </div>
           </div>
+          
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Package</label>
+              <select className="form-input" value={form.package || ""} onChange={e => set("package", e.target.value)}>
+                <option value="">Select package...</option>
+                <optgroup label="Individual Packages">
+                  {PACKAGES.individual.map(p => <option key={p} value={p}>{p}</option>)}
+                </optgroup>
+                <optgroup label="Bundles">
+                  {PACKAGES.bundles.map(p => <option key={p} value={p}>{p}</option>)}
+                </optgroup>
+              </select>
+            </div>
+          </div>
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Status</label>
@@ -835,6 +862,7 @@ function DetailPanel({ clinic, onClose, onUpdate }) {
               <div><div className="info-label">Email</div><div className="info-value" style={{ fontSize: 12 }}>{clinic.contact_email || "—"}</div></div>
               <div><div className="info-label">Start Date</div><div className="info-value">{formatDate(clinic.start_date)}</div></div>
               {clinic.website && <div style={{ gridColumn: "span 2" }}><div className="info-label">Website</div><div className="info-value" style={{ fontSize: 12 }}>{clinic.website}</div></div>}
+              {clinic.package && <div style={{ gridColumn: "span 2" }}><div className="info-label">Package</div><div className="info-value" style={{ fontSize: 12, color: "#3b82f6", fontWeight: 600 }}>{clinic.package}</div></div>}
             </div>
           </div>
           
@@ -1213,7 +1241,7 @@ export default function App() {
 
   useEffect(() => {
     if (!authed) { setLoading(false); return; }
-    supa.getAll()
+    db.getAll()
       .then(data => { setClinics(data || []); setLoading(false); })
       .catch(() => { setClinics([]); setLoading(false); });
   }, [authed]);
@@ -1223,7 +1251,7 @@ export default function App() {
   const handleStatusChange = useCallback(async (id, newStatus) => {
     setClinics(prev => prev.map(c => c.id === id ? { ...c, status: newStatus } : c));
     setSelected(sel => sel?.id === id ? { ...sel, status: newStatus } : sel);
-    try { await supa.update(id, { status: newStatus }); } catch (_) {}
+    try { await db.update(id, { status: newStatus }); } catch (_) {}
     showToast(`Moved to ${stageLabel(newStatus)}`);
   }, []);
 
@@ -1233,13 +1261,13 @@ export default function App() {
       const clinicTasks = DEFAULT_TASKS.clinic.map(t => ({ ...t, id: uid() }));
       const newClinic = { ...form, id: uid(), created_at: new Date().toISOString(), alignmentTasks, clinicTasks };
       setClinics(prev => [newClinic, ...prev]);
-      try { await supa.upsert(newClinic); } catch (_) {}
+      try { await db.create(newClinic); } catch (_) {}
       showToast("Clinic added");
     } else {
       const updated = { ...form };
       setClinics(prev => prev.map(c => c.id === form.id ? { ...c, ...updated } : c));
       if (selected?.id === form.id) setSelected(s => ({ ...s, ...updated }));
-      try { await supa.update(form.id, updated); } catch (_) {}
+      try { await db.update(form.id, updated); } catch (_) {}
       showToast("Changes saved");
     }
     setModal(null);
@@ -1248,7 +1276,7 @@ export default function App() {
   const handleDelete = useCallback(async (id) => {
     setClinics(prev => prev.filter(c => c.id !== id));
     if (selected?.id === id) setSelected(null);
-    try { await supa.delete(id); } catch (_) {}
+    try { await db.delete(id); } catch (_) {}
     showToast("Clinic removed");
   }, [selected]);
 
@@ -1256,7 +1284,7 @@ export default function App() {
     setClinics(prev => prev.map(c => c.id === updated.id ? updated : c));
     setSelected(updated);
     try { 
-      await supa.update(updated.id, { 
+      await db.update(updated.id, { 
         alignmentTasks: updated.alignmentTasks || [],
         clinicTasks: updated.clinicTasks || []
       }); 

@@ -1,0 +1,8 @@
+name = "alignment-automations"
+compatibility_date = "2026-02-19"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "alignment-automations-db"
+database_id = "b628ecb8-e56b-4c94-a6c0-605c810a45df"  # Replace with actual ID from wrangler d1 create
