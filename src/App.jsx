@@ -253,7 +253,7 @@ const PACKAGES = {
 
 // ─── Password ─────────────────────────────────────────────────────────────────
 
-const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || "changeme";
+const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || "8n4kvkar";
 
 const API_BASE = "/api";
 
