@@ -963,6 +963,41 @@ function DetailPanel({ clinic, onClose, onUpdate }) {
             <div className="detail-section-title">Status</div>
             <StatusBadge status={clinic.status} />
           </div>
+          
+          {/* Accounts Needed */}
+          <div>
+            <div className="detail-section-title">Accounts Needed</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {(() => {
+                const accounts = new Set();
+                [...(clinic.clinicTasks || [])].forEach(t => {
+                  if (t.name.includes("Calendly")) accounts.add("Calendly");
+                  if (t.name.includes("Typeform") || t.name.includes("Tally") || t.name.includes("form tool")) accounts.add("Form Tool");
+                  if (t.name.includes("Zapier") || t.name.includes("Make")) accounts.add("Zapier/Make");
+                  if (t.name.includes("Twilio")) accounts.add("Twilio");
+                });
+                return Array.from(accounts).map(account => (
+                  <span key={account} style={{
+                    padding: "6px 12px", background: "rgba(59,130,246,0.1)", 
+                    border: "1px solid rgba(59,130,246,0.3)", borderRadius: 6,
+                    fontSize: 11, fontWeight: 600, color: "#60a5fa"
+                  }}>
+                    {account}
+                  </span>
+                ));
+              })()}
+              {(() => {
+                const accounts = new Set();
+                [...(clinic.clinicTasks || [])].forEach(t => {
+                  if (t.name.includes("Calendly")) accounts.add("Calendly");
+                  if (t.name.includes("Typeform") || t.name.includes("Tally") || t.name.includes("form tool")) accounts.add("Form Tool");
+                  if (t.name.includes("Zapier") || t.name.includes("Make")) accounts.add("Zapier/Make");
+                  if (t.name.includes("Twilio")) accounts.add("Twilio");
+                });
+                return accounts.size === 0 ? <span style={{ fontSize: 12, color: "#64748b" }}>No accounts required</span> : null;
+              })()}
+            </div>
+          </div>
           <div>
             <div className="detail-section-title">Contact Info</div>
             <div className="info-grid">
