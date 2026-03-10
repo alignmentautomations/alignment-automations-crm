@@ -34,186 +34,145 @@ const STAGE_DOT_COLOR = {
   testing: "#f97316", live: "#10b981", monthly_support: "#06b6d4", closed_lost: "#ef4444",
 };
 
-const PACKAGE_TASKS = {
-  "Automation Core": {
-    alignment: [
-      // Strategy
-      { name: "Confirm automation trigger points", done: false, section: "Strategy" },
-      { name: "Define notification recipients", done: false, section: "Strategy" },
-      { name: "Map automation workflow", done: false, section: "Strategy" },
-      // Build
-      { name: "Configure Zapier automation", done: false, section: "Build" },
-      { name: "Set up trigger conditions", done: false, section: "Build" },
-      { name: "Build notification system", done: false, section: "Build" },
-      { name: "Test automation flow", done: false, section: "Build" },
-      // Launch
-      { name: "Activate automation", done: false, section: "Launch" },
-      { name: "Monitor first triggers", done: false, section: "Launch" },
-    ],
+// ─── Checklist Modules ────────────────────────────────────────────────────────
+
+const MODULES = {
+  A: { // Core Automation
     clinic: [
-      { name: "Provide access credentials", done: false, section: "Setup" },
-      { name: "Confirm notification preferences", done: false, section: "Setup" },
-      { name: "Test automation workflow", done: false, section: "Testing" },
-    ],
-  },
-  
-  "Intake Foundation": {
-    alignment: [
-      // Strategy
-      { name: "Confirm intake flow structure", done: false, section: "Strategy" },
-      { name: "Finalize intake questions", done: false, section: "Strategy" },
-      { name: "Draft confirmation email copy", done: false, section: "Strategy" },
-      // Build
-      { name: "Create intake form", done: false, section: "Build" },
-      { name: "Configure form validation", done: false, section: "Build" },
-      { name: "Build form → email automation", done: false, section: "Build" },
-      { name: "Configure booking link", done: false, section: "Build" },
-      // QA
-      { name: "Test form submission (desktop)", done: false, section: "QA" },
-      { name: "Test form submission (mobile)", done: false, section: "QA" },
-      { name: "Confirm email delivery", done: false, section: "QA" },
-      // Launch
-      { name: "Deliver live form link", done: false, section: "Launch" },
-      { name: "Conduct walkthrough", done: false, section: "Launch" },
-    ],
-    clinic: [
-      { name: "Provide master email", done: false, section: "Accounts" },
-      { name: "Create Calendly account", done: false, section: "Accounts" },
-      { name: "Connect calendar to Calendly", done: false, section: "Accounts" },
-      { name: "Approve intake questions", done: false, section: "Approvals" },
-      { name: "Approve email copy", done: false, section: "Approvals" },
-      { name: "Test booking flow", done: false, section: "Testing" },
-    ],
-  },
-  
-  "Call Protection": {
-    alignment: [
-      { name: "Configure call screening rules", done: false, section: "Setup" },
-      { name: "Set up spam filtering", done: false, section: "Setup" },
-      { name: "Configure forwarding rules", done: false, section: "Setup" },
-      { name: "Test call routing", done: false, section: "Testing" },
-      { name: "Activate protection", done: false, section: "Launch" },
-    ],
-    clinic: [
-      { name: "Provide phone number", done: false, section: "Setup" },
-      { name: "Confirm call handling preferences", done: false, section: "Setup" },
-      { name: "Test call flow", done: false, section: "Testing" },
-    ],
-  },
-  
-  "Call Capture": {
-    alignment: [
-      { name: "Configure call tracking", done: false, section: "Setup" },
-      { name: "Set up call recording", done: false, section: "Setup" },
-      { name: "Build call → CRM automation", done: false, section: "Build" },
-      { name: "Configure notifications", done: false, section: "Build" },
-      { name: "Test capture flow", done: false, section: "Testing" },
-      { name: "Activate system", done: false, section: "Launch" },
-    ],
-    clinic: [
-      { name: "Provide CRM access", done: false, section: "Setup" },
-      { name: "Confirm tracking preferences", done: false, section: "Setup" },
-      { name: "Review call logs", done: false, section: "Testing" },
-    ],
-  },
-  
-  "Core + Call Protection": {
-    alignment: [
-      // Automation
-      { name: "Configure automation workflow", done: false, section: "Automation" },
-      { name: "Build notification system", done: false, section: "Automation" },
-      { name: "Test automation", done: false, section: "Automation" },
-      // Call Protection
-      { name: "Configure call screening", done: false, section: "Call Protection" },
-      { name: "Set up spam filtering", done: false, section: "Call Protection" },
-      { name: "Test call routing", done: false, section: "Call Protection" },
-      // Launch
-      { name: "Activate all systems", done: false, section: "Launch" },
-      { name: "Monitor integration", done: false, section: "Launch" },
-    ],
-    clinic: [
-      { name: "Provide access credentials", done: false, section: "Setup" },
-      { name: "Provide phone number", done: false, section: "Setup" },
-      { name: "Test full workflow", done: false, section: "Testing" },
-    ],
-  },
-  
-  "Foundation + Core": {
-    alignment: [
-      // Intake
-      { name: "Build intake form", done: false, section: "Intake" },
-      { name: "Configure form validation", done: false, section: "Intake" },
-      { name: "Set up booking link", done: false, section: "Intake" },
-      // Automation
-      { name: "Build form → automation flow", done: false, section: "Automation" },
-      { name: "Configure notifications", done: false, section: "Automation" },
-      // QA
-      { name: "Test intake submission", done: false, section: "QA" },
-      { name: "Test automation triggers", done: false, section: "QA" },
-      // Launch
-      { name: "Deliver live system", done: false, section: "Launch" },
-      { name: "Conduct training", done: false, section: "Launch" },
-    ],
-    clinic: [
-      { name: "Create Calendly account", done: false, section: "Accounts" },
-      { name: "Provide automation credentials", done: false, section: "Accounts" },
-      { name: "Approve intake questions", done: false, section: "Approvals" },
-      { name: "Test full flow", done: false, section: "Testing" },
-    ],
-  },
-  
-  "Full Intake Infrastructure": {
-    alignment: [
-      // Strategy
-      { name: "Confirm intake flow structure", done: false, section: "Strategy" },
-      { name: "Confirm booking process logic", done: false, section: "Strategy" },
-      { name: "Finalize intake questions", done: false, section: "Strategy" },
-      { name: "Draft confirmation email copy", done: false, section: "Strategy" },
-      // Build
-      { name: "Create intake form", done: false, section: "Build" },
-      { name: "Configure form validation", done: false, section: "Build" },
-      { name: "Connect Zapier trigger", done: false, section: "Build" },
-      { name: "Build form → auto email automation", done: false, section: "Build" },
-      { name: "Insert booking link into confirmation email", done: false, section: "Build" },
-      { name: "Configure internal notification email", done: false, section: "Build" },
-      { name: "Connect lead logging (Sheet / CRM)", done: false, section: "Build" },
-      { name: "Set up call protection", done: false, section: "Build" },
-      { name: "Configure call capture", done: false, section: "Build" },
-      // QA
-      { name: "Test form submission (desktop)", done: false, section: "QA" },
-      { name: "Test form submission (mobile)", done: false, section: "QA" },
-      { name: "Confirm email sends instantly", done: false, section: "QA" },
-      { name: "Confirm booking link works", done: false, section: "QA" },
-      { name: "Confirm appointment appears on calendar", done: false, section: "QA" },
-      { name: "Confirm internal notification received", done: false, section: "QA" },
-      { name: "Test call routing", done: false, section: "QA" },
-      { name: "Test call capture", done: false, section: "QA" },
-      // Launch
-      { name: "Deliver live links to clinic", done: false, section: "Launch" },
-      { name: "Conduct system walkthrough", done: false, section: "Launch" },
-      { name: "Confirm automations are active", done: false, section: "Launch" },
-      { name: "Mark clinic 'Live'", done: false, section: "Launch" },
-    ],
-    clinic: [
-      // Accounts & Access
-      { name: "Provide master email", done: false, section: "Accounts & Access" },
       { name: "Create Calendly account", done: false, section: "Accounts & Access" },
       { name: "Connect calendar to Calendly", done: false, section: "Accounts & Access" },
-      { name: "Create Zapier account", done: false, section: "Accounts & Access" },
-      { name: "Grant Alignment Automations administrator access", done: false, section: "Accounts & Access" },
-      { name: "Confirm timezone & availability schedule", done: false, section: "Accounts & Access" },
-      { name: "Provide phone number for call protection", done: false, section: "Accounts & Access" },
-      // Approvals
+      { name: "Set appointment availability", done: false, section: "Accounts & Access" },
+      { name: "Create intake form tool (Tally / Typeform)", done: false, section: "Accounts & Access" },
+      { name: "Create Zapier or Make account", done: false, section: "Accounts & Access" },
+      { name: "Provide master contact email", done: false, section: "Accounts & Access" },
       { name: "Approve intake questions", done: false, section: "Approvals" },
-      { name: "Approve confirmation email copy", done: false, section: "Approvals" },
-      { name: "Confirm notification email address", done: false, section: "Approvals" },
-      // Post-Launch
-      { name: "Monitor incoming leads", done: false, section: "Post-Launch" },
-      { name: "Update availability as needed", done: false, section: "Post-Launch" },
-      { name: "Attend follow-up check-in", done: false, section: "Post-Launch" },
+      { name: "Approve confirmation message copy", done: false, section: "Approvals" },
+      { name: "Give admin access to Calendly", done: false, section: "Accounts & Access" },
+      { name: "Give admin access to Form tool", done: false, section: "Accounts & Access" },
+      { name: "Give admin access to Zapier/Make", done: false, section: "Accounts & Access" },
+    ],
+    alignment: [
+      { name: "Confirm intake flow structure", done: false, section: "Build" },
+      { name: "Create intake form", done: false, section: "Build" },
+      { name: "Configure form validation", done: false, section: "Build" },
+      { name: "Create automation trigger", done: false, section: "Build" },
+      { name: "Build form → confirmation email automation", done: false, section: "Build" },
+      { name: "Insert booking link into confirmation message", done: false, section: "Build" },
+      { name: "Configure internal notification email", done: false, section: "Build" },
+      { name: "Create lead logging sheet or CRM entry", done: false, section: "Build" },
+      { name: "Test form submission (desktop)", done: false, section: "Testing & Launch" },
+      { name: "Test form submission (mobile)", done: false, section: "Testing & Launch" },
+      { name: "Confirm booking link works", done: false, section: "Testing & Launch" },
+      { name: "Confirm calendar receives appointment", done: false, section: "Testing & Launch" },
+      { name: "Confirm notification email is received", done: false, section: "Testing & Launch" },
+      { name: "Mark system Ready for Launch", done: false, section: "Testing & Launch" },
+      { name: "Send clinic walkthrough", done: false, section: "Testing & Launch" },
+    ],
+  },
+  
+  B: { // Call Capture
+    clinic: [
+      { name: "Create Twilio account", done: false, section: "Accounts & Access" },
+      { name: "Purchase phone number", done: false, section: "Accounts & Access" },
+      { name: "Register business profile (A2P if required)", done: false, section: "Accounts & Access" },
+      { name: "Add Alignment Automations as admin", done: false, section: "Accounts & Access" },
+      { name: "Provide clinic booking link", done: false, section: "Accounts & Access" },
+      { name: "Confirm call handling preference", done: false, section: "Approvals" },
+    ],
+    alignment: [
+      { name: "Connect Twilio number", done: false, section: "Build" },
+      { name: "Configure missed call detection", done: false, section: "Build" },
+      { name: "Create SMS response template", done: false, section: "Build" },
+      { name: "Insert booking link in response", done: false, section: "Build" },
+      { name: "Configure response delay (if needed)", done: false, section: "Build" },
+      { name: "Configure spam filtering", done: false, section: "Build" },
+      { name: "Create logging for phone leads", done: false, section: "Build" },
+      { name: "Test missed call trigger", done: false, section: "Testing & Launch" },
+      { name: "Test SMS delivery", done: false, section: "Testing & Launch" },
+      { name: "Test booking link from text", done: false, section: "Testing & Launch" },
+      { name: "Confirm notification workflow", done: false, section: "Testing & Launch" },
+      { name: "Mark system Ready", done: false, section: "Testing & Launch" },
+    ],
+  },
+  
+  C: { // Website Foundation
+    clinic: [
+      { name: "Provide business name", done: false, section: "Accounts & Access" },
+      { name: "Provide logo", done: false, section: "Accounts & Access" },
+      { name: "Provide services list", done: false, section: "Accounts & Access" },
+      { name: "Provide service descriptions (or approve draft)", done: false, section: "Accounts & Access" },
+      { name: "Provide contact information", done: false, section: "Accounts & Access" },
+      { name: "Provide address", done: false, section: "Accounts & Access" },
+      { name: "Provide booking link", done: false, section: "Accounts & Access" },
+      { name: "Approve website copy", done: false, section: "Approvals" },
+      { name: "Approve page structure", done: false, section: "Approvals" },
+    ],
+    alignment: [
+      { name: "Create website project", done: false, section: "Build" },
+      { name: "Build homepage layout", done: false, section: "Build" },
+      { name: "Build services page", done: false, section: "Build" },
+      { name: "Build booking page", done: false, section: "Build" },
+      { name: "Build contact page", done: false, section: "Build" },
+      { name: "Insert booking call-to-action buttons", done: false, section: "Build" },
+      { name: "Optimize for mobile", done: false, section: "Build" },
+      { name: "Configure domain", done: false, section: "Build" },
+      { name: "Connect hosting", done: false, section: "Build" },
+      { name: "Test booking links", done: false, section: "Testing & Launch" },
+      { name: "Test mobile layout", done: false, section: "Testing & Launch" },
+      { name: "Publish website", done: false, section: "Testing & Launch" },
+      { name: "Send review link", done: false, section: "Testing & Launch" },
+      { name: "Mark Website Live", done: false, section: "Testing & Launch" },
+    ],
+  },
+  
+  D: { // Call Protection
+    clinic: [
+      { name: "Create Twilio account", done: false, section: "Accounts & Access" },
+      { name: "Purchase phone number", done: false, section: "Accounts & Access" },
+      { name: "Provide booking link", done: false, section: "Accounts & Access" },
+      { name: "Give Alignment Automations admin access", done: false, section: "Accounts & Access" },
+    ],
+    alignment: [
+      { name: "Connect Twilio number", done: false, section: "Build" },
+      { name: "Configure missed-call trigger", done: false, section: "Build" },
+      { name: "Create SMS auto-response", done: false, section: "Build" },
+      { name: "Insert booking link", done: false, section: "Build" },
+      { name: "Configure quiet hours if needed", done: false, section: "Build" },
+      { name: "Test missed call", done: false, section: "Testing & Launch" },
+      { name: "Test SMS delivery", done: false, section: "Testing & Launch" },
+      { name: "Confirm booking link works", done: false, section: "Testing & Launch" },
+      { name: "Mark Call Protection Active", done: false, section: "Testing & Launch" },
     ],
   },
 };
+
+// Package definitions - which modules each package uses
+const PACKAGE_MODULES = {
+  "Automation Core": ["A"],
+  "Intake Foundation": ["A", "C"],
+  "Call Protection": ["D"],
+  "Call Capture": ["B"],
+  "Core + Call Protection": ["A", "D"],
+  "Foundation + Core": ["A", "C"],
+  "Full Intake Infrastructure": ["A", "B", "C"],
+};
+
+// Combine modules for a package
+function getPackageTasks(packageName) {
+  const moduleKeys = PACKAGE_MODULES[packageName] || [];
+  const alignment = [];
+  const clinic = [];
+  
+  moduleKeys.forEach(key => {
+    if (MODULES[key]) {
+      alignment.push(...MODULES[key].alignment);
+      clinic.push(...MODULES[key].clinic);
+    }
+  });
+  
+  return { alignment, clinic };
+}
+
 
 // Default fallback if no package selected
 const DEFAULT_TASKS = {
@@ -1407,7 +1366,7 @@ export default function App() {
 
   const handleSave = useCallback(async (form) => {
     if (modal === "add") {
-      const packageTasks = PACKAGE_TASKS[form.package] || DEFAULT_TASKS;
+      const packageTasks = form.package ? getPackageTasks(form.package) : DEFAULT_TASKS;
       const alignmentTasks = packageTasks.alignment.map(t => ({ ...t, id: uid() }));
       const clinicTasks = packageTasks.clinic.map(t => ({ ...t, id: uid() }));
       const newClinic = { ...form, id: uid(), created_at: new Date().toISOString(), alignmentTasks, clinicTasks };
