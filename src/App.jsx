@@ -42,7 +42,7 @@ const MODULES = {
       { name: "Create Calendly account", done: false, section: "Accounts & Access" },
       { name: "Connect calendar to Calendly", done: false, section: "Accounts & Access" },
       { name: "Set appointment availability", done: false, section: "Accounts & Access" },
-      { name: "Create intake form tool (Tally / Typeform)", done: false, section: "Accounts & Access" },
+      { name: "Create intake form tool (Google Forms / Tally / Typeform)", done: false, section: "Accounts & Access" },
       { name: "Create Zapier or Make account", done: false, section: "Accounts & Access" },
       { name: "Provide master contact email", done: false, section: "Accounts & Access" },
       { name: "Approve intake questions", done: false, section: "Approvals" },
