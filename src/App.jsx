@@ -1272,31 +1272,17 @@ function DashboardView({ clinics, sequences, onAdd, onEdit, onDelete, onSelect, 
                     <td style={{ fontSize:12, color:"#64748b" }}>{c.package || "&#8212;"}</td>
                     <td><StatusDropdown status={c.status} onChange={s => onStatusChange(c.id, s)} /></td>
                     <td>
-                      <td>
-                        {activeFuCount > 0 ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        {c.followUps.filter(f => f.status === "active").map(fu => (
-                        <span 
-                        key={fu.id} 
-                        className="fu-badge fu-active" 
-                        style={{ cursor: "pointer", fontSize: '10px' }} 
-                        onClick={() => onSelect(c)}
-                        >
-                        {fu.seqName} {/* Now displays "New Client Welcome", etc. */}
-                        </span>
-      ))}
-    </div>
-  ) : hasSuggest ? (
-    <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px", borderColor: "rgba(37,99,235,0.3)", color: "#60a5fa" }} onClick={() => onOpenLaunch(c)}>
-      <Ic.Zap /> Suggested
-    </button>
-  ) : (
-    <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => onOpenLaunch(c)}>
-      <Ic.Zap /> Launch
-    </button>
-  )}
-</td>
-
+                      {activeFuCount > 0 ? (
+                        <span className="fu-badge fu-active" style={{ cursor:"pointer" }} onClick={() => onSelect(c)}>{activeFuCount} active</span>
+                      ) : hasSuggest ? (
+                        <button className="btn-ghost" style={{ fontSize:11, padding:"4px 8px", borderColor:"rgba(37,99,235,0.3)", color:"#60a5fa" }} onClick={() => onOpenLaunch(c)}>
+                          <Ic.Zap /> Suggested
+                        </button>
+                      ) : (
+                        <button className="btn-ghost" style={{ fontSize:11, padding:"4px 8px" }} onClick={() => onOpenLaunch(c)}>
+                          <Ic.Zap /> Launch
+                        </button>
+                      )}
                     </td>
                     <td>
                       <div className="actions-cell">
@@ -1391,21 +1377,12 @@ function PipelineView({ clinics, sequences, onSelect, onStatusChange, onOpenLaun
                             <div className="card-name">{c.name}</div>
                             <div className="card-contact">{c.contact_name || "&#8212;"}</div>
                             <div className="card-date">{formatDate(c.start_date)}</div>
-                          
-                           {activeFu.length > 0 && (
-                           <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 5 }}>
-                              {activeFu.map(fu => (
-                             <div key={fu.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ade80", display: "inline-block" }} />
-                              <span style={{ fontSize: 10, color: "#4ade80", fontWeight: 600 }}>
-                              {fu.seqName}
-                              </span>
-                             </div>
-                           ))}
-                          </div>
-                        )}
-
-
+                            {activeFu.length > 0 && (
+                              <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:5 }}>
+                                <span style={{ width:6, height:6, borderRadius:"50%", background:"#4ade80", display:"inline-block" }} />
+                                <span style={{ fontSize:10, color:"#4ade80" }}>{activeFu.length} sequence{activeFu.length > 1 ? "s" : ""} running</span>
+                              </div>
+                            )}
                             {hasSuggest && (
                               <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:5 }}
                                 onClick={e => { e.stopPropagation(); onOpenLaunch(c); }}>
@@ -1435,16 +1412,57 @@ function FollowupView({ clinics, sequences, setSequences, onOpenLaunch, onSelect
   const [editingSeq, setEditingSeq] = useState(null);
   const [showNewSeq, setShowNewSeq] = useState(false);
   const [previewSeq, setPreviewSeq] = useState(null);
+  const [seqSaving, setSeqSaving] = useState(false);
 
-  const allFu      = clinics.flatMap(c => (c.followUps||[]).map(f => ({ ...f, clinic: c })));
-  const activeFu   = allFu.filter(f => f.status === "active");
+  const allFu       = clinics.flatMap(c => (c.followUps||[]).map(f => ({ ...f, clinic: c })));
+  const activeFu    = allFu.filter(f => f.status === "active");
   const completedFu = allFu.filter(f => f.status === "completed");
-  const pausedFu   = allFu.filter(f => f.status === "paused");
+  const pausedFu    = allFu.filter(f => f.status === "paused");
+
+  // Persist sequences to D1 via /api/sequences
+  const persistSequences = async (next) => {
+    setSeqSaving(true);
+    try {
+      await fetch(`${API_BASE}/sequences`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      });
+    } catch (_) {}
+    setSeqSaving(false);
+  };
 
   const saveSeq = seq => {
-    setSequences(prev => { const ex = prev.find(s => s.id === seq.id); return ex ? prev.map(s => s.id === seq.id ? seq : s) : [...prev, seq]; });
-    setEditingSeq(null); setShowNewSeq(false);
+    const next = sequences.find(s => s.id === seq.id)
+      ? sequences.map(s => s.id === seq.id ? seq : s)
+      : [...sequences, seq];
+    setSequences(next);
+    persistSequences(next);
+    setEditingSeq(null);
+    setShowNewSeq(false);
   };
+
+  const toggleActive = (seqId) => {
+    const next = sequences.map(s => s.id === seqId ? { ...s, active: !s.active } : s);
+    setSequences(next);
+    persistSequences(next);
+  };
+
+  const deleteSeq = (seqId) => {
+    const next = sequences.filter(s => s.id !== seqId);
+    setSequences(next);
+    persistSequences(next);
+  };
+
+  const tabBtn = (id, label) => (
+    <button key={id} onClick={() => setFuTab(id)}
+      style={{ background:"none", border:"none", cursor:"pointer", padding:"10px 16px", fontSize:13, fontWeight:600,
+        color: fuTab===id ? "#f8fafc" : "#475569",
+        borderBottom: fuTab===id ? "2px solid #2563eb" : "2px solid transparent",
+        marginBottom:-1, transition:"all 0.15s", fontFamily:"Manrope,sans-serif" }}>
+      {label}
+    </button>
+  );
 
   return (
     <>
@@ -1453,7 +1471,8 @@ function FollowupView({ clinics, sequences, setSequences, onOpenLaunch, onSelect
           <div className="page-title">Follow-ups</div>
           <div className="page-subtitle">{activeFu.length} active &middot; {sequences.filter(s => s.active).length} sequences enabled</div>
         </div>
-        <div style={{ display:"flex", gap:8 }}>
+        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+          {seqSaving && <span style={{ fontSize:11, color:"#475569" }}>Saving&hellip;</span>}
           <button className="btn-ghost" onClick={() => setShowNewSeq(true)}><Ic.Plus /> Sequence</button>
           <button className="btn-primary" onClick={() => onOpenLaunch(null)}><Ic.Zap /> Launch</button>
         </div>
@@ -1462,23 +1481,20 @@ function FollowupView({ clinics, sequences, setSequences, onOpenLaunch, onSelect
 
         {/* Sub-tabs */}
         <div style={{ display:"flex", gap:2, marginBottom:20, borderBottom:"1px solid rgba(255,255,255,0.07)" }}>
-          {[["activity","Activity"],["sequences","Sequences"]].map(([id,label]) => (
-            <button key={id} onClick={() => setFuTab(id)}
-              style={{ background:"none", border:"none", cursor:"pointer", padding:"10px 16px", fontSize:13, fontWeight:600, color: fuTab===id ? "#f8fafc" : "#475569", borderBottom: fuTab===id ? "2px solid #2563eb" : "2px solid transparent", marginBottom:-1, transition:"all 0.15s", fontFamily:"Manrope,sans-serif" }}>
-              {label}
-            </button>
-          ))}
+          {tabBtn("activity", "Activity")}
+          {tabBtn("sequences", "Sequences")}
         </div>
 
         {/* ── Activity ── */}
         {fuTab === "activity" && (
           <>
+            {/* Stats */}
             <div className="stats-grid">
               {[
-                { label:"Active",    value: activeFu.length,    color:"#4ade80" },
-                { label:"Paused",    value: pausedFu.length,    color:"#f59e0b" },
-                { label:"Completed", value: completedFu.length, color:"#94a3b8" },
-                { label:"Sequences", value: sequences.filter(s => s.active).length, color:"#60a5fa" },
+                { label:"Active",    value: activeFu.length,                         color:"#4ade80" },
+                { label:"Paused",    value: pausedFu.length,                         color:"#f59e0b" },
+                { label:"Completed", value: completedFu.length,                      color:"#94a3b8" },
+                { label:"Sequences", value: sequences.filter(s => s.active).length,  color:"#60a5fa" },
               ].map((st, i) => (
                 <div key={i} className="stat-card">
                   <div className="stat-label" style={{ color: st.color }}>{st.label}</div>
@@ -1487,53 +1503,94 @@ function FollowupView({ clinics, sequences, setSequences, onOpenLaunch, onSelect
               ))}
             </div>
 
-            {allFu.length === 0 ? (
+            {/* Active sequence cards grouped by sequence name */}
+            {activeFu.length === 0 && pausedFu.length === 0 && completedFu.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">&#9889;</div>
                 <div className="empty-title">No follow-ups yet</div>
                 <div className="empty-sub">Launch a sequence from a clinic, or click Launch above</div>
               </div>
             ) : (
-              <div className="table-wrap">
-                <div style={{ padding:"14px 20px", borderBottom:"1px solid rgba(255,255,255,0.07)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                  <span style={{ color:"#f8fafc", fontWeight:700, fontSize:14 }}>All Follow-ups</span>
-                  <span style={{ color:"#475569", fontSize:12, fontFamily:"'JetBrains Mono',monospace" }}>{allFu.length} total</span>
-                </div>
-                <table>
-                  <thead><tr><th>Clinic</th><th>Sequence</th><th>Trigger</th><th>Progress</th><th>Status</th><th>Launched</th></tr></thead>
-                  <tbody>
-                    {allFu.sort((a,b) => b.triggeredAt - a.triggeredAt).map(fu => {
-                      const trig = getTrigger(fu.trigger);
-                      const sent = fu.steps.filter(s => s.status === "sent").length;
-                      const p    = fu.totalSteps ? Math.round((sent / fu.totalSteps) * 100) : 0;
-                      return (
-                        <tr key={fu.id} style={{ cursor:"pointer" }} onClick={() => onSelectClinic(fu.clinic)}>
-                          <td>
-                            <div style={{ fontWeight:600, color:"#f8fafc" }}>{fu.clinic.name}</div>
-                            <div style={{ fontSize:11, color:"#475569", marginTop:2 }}>{fu.clinic.contact_name || "&#8212;"}</div>
-                          </td>
-                          <td style={{ color:"#94a3b8", fontSize:13 }}>{fu.seqName}</td>
-                          <td>
-                            <span style={{ display:"inline-flex", alignItems:"center", gap:6, color:trig.color, fontSize:12, fontWeight:600 }}>
-                              {trig.icon} {trig.label}
-                            </span>
-                          </td>
-                          <td>
-                            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                              <div style={{ flex:1, height:4, background:"rgba(255,255,255,0.07)", borderRadius:2, minWidth:60 }}>
-                                <div style={{ height:"100%", background: fu.status === "active" ? "#4ade80" : "#64748b", borderRadius:2, width: p + "%" }} />
-                              </div>
-                              <span style={{ fontSize:11, color:"#475569", fontFamily:"monospace", whiteSpace:"nowrap" }}>{sent}/{fu.totalSteps}</span>
-                            </div>
-                          </td>
-                          <td><FuBadge fu={fu} /></td>
-                          <td style={{ fontSize:12, color:"#475569" }}>{timeAgo(fu.triggeredAt)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                {/* Group active+paused by sequence for a cleaner view */}
+                {sequences.map(seq => {
+                  const seqFu = allFu.filter(f => f.seqId === seq.id && (f.status === "active" || f.status === "paused"));
+                  if (seqFu.length === 0) return null;
+                  const trig = getTrigger(seq.trigger);
+                  return (
+                    <div key={seq.id} className="table-wrap" style={{ marginBottom:16 }}>
+                      {/* Sequence header */}
+                      <div style={{ padding:"12px 18px", borderBottom:"1px solid rgba(255,255,255,0.07)", display:"flex", alignItems:"center", gap:10 }}>
+                        <div style={{ width:28, height:28, borderRadius:6, background:`${trig.color}18`, display:"flex", alignItems:"center", justifyContent:"center", color:trig.color, fontSize:14, flexShrink:0 }}>{trig.icon}</div>
+                        <div style={{ flex:1 }}>
+                          <span style={{ color:"#f8fafc", fontWeight:700, fontSize:13 }}>{seq.name}</span>
+                          <span style={{ color:"#475569", fontSize:11, marginLeft:8 }}>{trig.label} &middot; {seq.steps.length} steps</span>
+                        </div>
+                        <span style={{ color:"#475569", fontSize:11, fontFamily:"'JetBrains Mono',monospace" }}>{seqFu.length} clinic{seqFu.length > 1 ? "s" : ""}</span>
+                      </div>
+                      {/* Clinic rows */}
+                      <table>
+                        <thead>
+                          <tr><th>Clinic</th><th>Progress</th><th>Status</th><th>Launched</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                          {seqFu.sort((a,b) => b.triggeredAt - a.triggeredAt).map(fu => {
+                            const sent = fu.steps.filter(s => s.status === "sent").length;
+                            const p    = fu.totalSteps ? Math.round((sent / fu.totalSteps) * 100) : 0;
+                            return (
+                              <tr key={fu.id}>
+                                <td style={{ cursor:"pointer" }} onClick={() => onSelectClinic(fu.clinic)}>
+                                  <div style={{ fontWeight:600, color:"#f8fafc" }}>{fu.clinic.name}</div>
+                                  <div style={{ fontSize:11, color:"#475569", marginTop:1 }}>{fu.clinic.contact_name || "&#8212;"}</div>
+                                </td>
+                                <td>
+                                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                                    <div style={{ flex:1, height:4, background:"rgba(255,255,255,0.07)", borderRadius:2, minWidth:80 }}>
+                                      <div style={{ height:"100%", background: fu.status==="active" ? "#4ade80" : "#64748b", borderRadius:2, width: p+"%" }} />
+                                    </div>
+                                    <span style={{ fontSize:11, color:"#475569", fontFamily:"monospace", whiteSpace:"nowrap" }}>
+                                      Step {sent}/{fu.totalSteps}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td><FuBadge fu={fu} /></td>
+                                <td style={{ fontSize:12, color:"#475569" }}>{timeAgo(fu.triggeredAt)}</td>
+                                <td>
+                                  <button className="btn-ghost" style={{ fontSize:11, padding:"4px 8px" }} onClick={() => onSelectClinic(fu.clinic)}>
+                                    View
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })}
+
+                {/* Completed history (collapsed) */}
+                {completedFu.length > 0 && (
+                  <div className="table-wrap">
+                    <div style={{ padding:"12px 18px", borderBottom:"1px solid rgba(255,255,255,0.07)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                      <span style={{ color:"#94a3b8", fontWeight:600, fontSize:13 }}>Completed</span>
+                      <span style={{ color:"#475569", fontSize:11, fontFamily:"'JetBrains Mono',monospace" }}>{completedFu.length}</span>
+                    </div>
+                    <table>
+                      <thead><tr><th>Clinic</th><th>Sequence</th><th>Launched</th></tr></thead>
+                      <tbody>
+                        {completedFu.slice(0,5).map(fu => (
+                          <tr key={fu.id} style={{ cursor:"pointer" }} onClick={() => onSelectClinic(fu.clinic)}>
+                            <td style={{ color:"#64748b" }}>{fu.clinic.name}</td>
+                            <td style={{ color:"#64748b", fontSize:12 }}>{fu.seqName}</td>
+                            <td style={{ fontSize:12, color:"#475569" }}>{timeAgo(fu.triggeredAt)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
@@ -1544,59 +1601,75 @@ function FollowupView({ clinics, sequences, setSequences, onOpenLaunch, onSelect
             <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:14 }}>
               <button className="btn-primary" onClick={() => setShowNewSeq(true)}><Ic.Plus /> New Sequence</button>
             </div>
-            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
               {sequences.map(seq => {
                 const trig     = getTrigger(seq.trigger);
                 const expanded = previewSeq === seq.id;
                 const usage    = clinics.filter(c => (c.followUps||[]).some(f => f.seqId === seq.id)).length;
+                const activeCount = clinics.reduce((n,c) => n + (c.followUps||[]).filter(f => f.seqId===seq.id && f.status==="active").length, 0);
                 return (
                   <div key={seq.id} className="seq-card">
-                    <div className="seq-card-header">
-                      <div className="seq-trigger-icon" style={{ background:`${trig.color}18`, color:trig.color }}>{trig.icon}</div>
+                    {/* Row 1: icon + name + badges */}
+                    <div style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"16px 18px 12px" }}>
+                      <div className="seq-trigger-icon" style={{ background:`${trig.color}18`, color:trig.color, flexShrink:0 }}>{trig.icon}</div>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:4 }}>
                           <span style={{ color:"#f8fafc", fontWeight:700, fontSize:14 }}>{seq.name}</span>
                           <span className={`fu-badge ${seq.active ? "fu-active" : "fu-paused"}`}>{seq.active ? "Active" : "Paused"}</span>
-                          {usage > 0 && <span style={{ fontSize:11, color:"#64748b" }}>Used by {usage} clinic{usage > 1 ? "s" : ""}</span>}
+                          {activeCount > 0 && <span className="fu-badge fu-active">{activeCount} running</span>}
+                          {usage > 0 && !activeCount && <span style={{ fontSize:11, color:"#64748b" }}>{usage} clinic{usage > 1 ? "s" : ""}</span>}
                         </div>
-                        <div style={{ color:"#475569", fontSize:12, marginTop:3 }}>
-                          {trig.label} &middot; {seq.steps.length} steps &middot; {seq.steps.filter(s => s.channel==="email").length} email &middot; {seq.steps.filter(s => s.channel==="sms").length} SMS
+                        <div style={{ color:"#475569", fontSize:12 }}>
+                          {trig.label} &middot; {seq.steps.length} step{seq.steps.length !== 1 ? "s" : ""} &middot; {seq.steps.filter(s => s.channel==="email").length} email &middot; {seq.steps.filter(s => s.channel==="sms").length} SMS
                         </div>
-                      </div>
-                      <div style={{ display:"flex", alignItems:"center", gap:3, flexShrink:0 }}>
-                        {seq.steps.map((s,i) => (
-                          <div key={s.id} style={{ display:"flex", alignItems:"center", gap:3 }}>
-                            {i > 0 && <div className="seq-connector" />}
-                            <div className="seq-step-pill" style={{ background: s.channel==="email" ? "rgba(96,165,250,0.15)" : "rgba(167,139,250,0.15)", color: s.channel==="email" ? "#60a5fa" : "#a78bfa" }}>
-                              {s.channel === "email" ? <Ic.Mail /> : <Ic.Sms />}
+                        {/* Step pills */}
+                        <div style={{ display:"flex", alignItems:"center", gap:3, marginTop:8, flexWrap:"wrap" }}>
+                          {seq.steps.map((s,i) => (
+                            <div key={s.id} style={{ display:"flex", alignItems:"center", gap:3 }}>
+                              {i > 0 && <div className="seq-connector" />}
+                              <div className="seq-step-pill" style={{ background: s.channel==="email" ? "rgba(96,165,250,0.15)" : "rgba(167,139,250,0.15)", color: s.channel==="email" ? "#60a5fa" : "#a78bfa" }}>
+                                {s.channel === "email" ? <Ic.Mail /> : <Ic.Sms />}
+                              </div>
+                              <span style={{ fontSize:10, color:"#475569", marginRight:2 }}>
+                                {i === 0 ? "Now" : `+${s.delay}${s.delayUnit[0]}`}
+                              </span>
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                      <div style={{ display:"flex", gap:5, flexShrink:0, marginLeft:4 }}>
-                        <button className="btn-ghost" style={{ padding:"5px 10px", fontSize:12 }} onClick={() => setPreviewSeq(expanded ? null : seq.id)}>
+                      {/* Action buttons — vertical stack on right */}
+                      <div style={{ display:"flex", flexDirection:"column", gap:5, flexShrink:0 }}>
+                        <button className="btn-ghost" style={{ padding:"5px 10px", fontSize:12, justifyContent:"center" }} onClick={() => setPreviewSeq(expanded ? null : seq.id)}>
                           {expanded ? "Hide" : "Preview"}
                         </button>
-                        <button className="btn-ghost" style={{ padding:"5px 8px" }} onClick={() => setSequences(prev => prev.map(s => s.id===seq.id ? { ...s, active:!s.active } : s))}>
-                          {seq.active ? <Ic.Pause /> : <Ic.Play />}
-                        </button>
-                        <button className="btn-ghost" style={{ padding:"5px 8px" }} onClick={() => setEditingSeq(seq)}><Ic.Edit /></button>
-                        <button className="btn-danger" onClick={() => setSequences(prev => prev.filter(s => s.id !== seq.id))}><Ic.Trash /></button>
+                        <div style={{ display:"flex", gap:5 }}>
+                          <button className="btn-ghost" style={{ padding:"5px 8px", flex:1, justifyContent:"center" }} title={seq.active ? "Pause" : "Activate"} onClick={() => toggleActive(seq.id)}>
+                            {seq.active ? <Ic.Pause /> : <Ic.Play />}
+                          </button>
+                          <button className="btn-ghost" style={{ padding:"5px 8px", flex:1, justifyContent:"center" }} title="Edit" onClick={() => setEditingSeq(seq)}><Ic.Edit /></button>
+                          <button className="btn-danger" style={{ padding:"5px 8px", flex:1, justifyContent:"center" }} title="Delete" onClick={() => deleteSeq(seq.id)}><Ic.Trash /></button>
+                        </div>
                       </div>
                     </div>
+
+                    {/* Preview pane */}
                     {expanded && (
                       <div className="seq-preview">
                         {seq.steps.map((s,i) => (
                           <div key={s.id} className="seq-step-preview">
                             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom: s.body ? 6 : 0 }}>
-                              <span style={{ color:"#475569", fontSize:11, fontFamily:"monospace" }}>Step {i+1}</span>
+                              <span style={{ color:"#475569", fontSize:11, fontFamily:"monospace", minWidth:46 }}>Step {i+1}</span>
                               <span style={{ color: s.channel==="email" ? "#60a5fa" : "#a78bfa" }}>{s.channel==="email" ? <Ic.Mail /> : <Ic.Sms />}</span>
                               <span style={{ color:"#94a3b8", fontSize:12 }}>
                                 {i===0 ? "Immediately" : `After ${s.delay} ${s.delayUnit}`}
                                 {s.channel==="email" && s.subject ? ` \u2014 "${s.subject}"` : ""}
                               </span>
                             </div>
-                            {s.body && <div style={{ color:"#64748b", fontSize:12, lineHeight:1.6, fontFamily:"monospace", whiteSpace:"pre-wrap", maxHeight:64, overflow:"hidden" }}>{s.body.slice(0,180)}{s.body.length > 180 ? "\u2026" : ""}</div>}
+                            {s.body && (
+                              <div style={{ color:"#64748b", fontSize:12, lineHeight:1.6, fontFamily:"monospace", whiteSpace:"pre-wrap", maxHeight:64, overflow:"hidden", marginTop:2 }}>
+                                {s.body.slice(0,200)}{s.body.length > 200 ? "\u2026" : ""}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1662,9 +1735,14 @@ export default function App() {
 
   useEffect(() => {
     if (!authed) { setLoading(false); return; }
-    db.getAll()
-      .then(data => { setClinics(data || []); setLoading(false); })
-      .catch(() => { setClinics([]); setLoading(false); });
+    Promise.all([
+      db.getAll().catch(() => []),
+      fetch(`${API_BASE}/sequences`).then(r => r.ok ? r.json() : []).catch(() => []),
+    ]).then(([clinicData, seqData]) => {
+      setClinics(clinicData || []);
+      if (Array.isArray(seqData) && seqData.length > 0) setSequences(seqData);
+      setLoading(false);
+    });
   }, [authed]);
 
   const showToast = msg => setToast(msg);
