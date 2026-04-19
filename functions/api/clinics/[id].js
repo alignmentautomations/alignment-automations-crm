@@ -9,6 +9,18 @@ function parseClinic(c) {
   };
 }
 
+function applyTemplate(text, clinic) {
+  if (!text) return text;
+  const firstName = (clinic.contact_name || '').split(' ')[0] || '';
+  const lastName  = (clinic.contact_name || '').split(' ').slice(1).join(' ') || '';
+  return text
+    .replace(/\{\{first_name\}\}/gi, firstName)
+    .replace(/\{\{last_name\}\}/gi,  lastName)
+    .replace(/\{\{clinic_name\}\}/gi, clinic.name || '')
+    .replace(/\{\{email\}\}/gi,      clinic.contact_email || '')
+    .replace(/\{\{phone\}\}/gi,      clinic.contact_phone || '');
+}
+
 function delayMs(delay, unit) {
   switch (unit) {
     case 'minutes': return delay * 60 * 1000;
@@ -105,10 +117,10 @@ export async function onRequestPatch({ params, request, env }) {
         try {
           if (step.channel === 'email') {
             if (!clinic.contact_email) throw new Error('no email on file');
-            await sendEmail(clinic.contact_email, step.subject, step.body, env);
+            await sendEmail(clinic.contact_email, applyTemplate(step.subject, clinic), applyTemplate(step.body, clinic), env);
           } else {
             if (!clinic.contact_phone) throw new Error('no phone on file');
-            await sendSms(clinic.contact_phone, step.body, env);
+            await sendSms(clinic.contact_phone, applyTemplate(step.body, clinic), env);
           }
           fu.steps[0] = { ...step, status: 'sent', sentAt: Date.now() };
           fu.currentStep = 1;

@@ -1,5 +1,10 @@
 // Cloudflare Pages Function: /functions/api/webhook/form-inquiry.js
-// Called by Google Apps Script when a new form row is added to the sheet.
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, x-webhook-secret',
+};
 
 function uid() {
   return crypto.randomUUID();
@@ -12,6 +17,16 @@ function delayMs(delay, unit) {
     case 'days':    return delay * 24 * 60 * 60 * 1000;
     default:        return delay * 60 * 60 * 1000;
   }
+}
+
+function applyTemplate(text, vars) {
+  if (!text) return text;
+  return text
+    .replace(/\{\{first_name\}\}/gi, vars.first_name || '')
+    .replace(/\{\{last_name\}\}/gi,  vars.last_name  || '')
+    .replace(/\{\{clinic_name\}\}/gi, vars.clinic_name || '')
+    .replace(/\{\{email\}\}/gi,      vars.email       || '')
+    .replace(/\{\{phone\}\}/gi,      vars.phone       || '');
 }
 
 async function sendEmail(to, subject, body, env) {
@@ -53,29 +68,34 @@ async function sendSms(to, body, env) {
   if (!res.ok) throw new Error(`Twilio: ${await res.text()}`);
 }
 
+// Handle CORS preflight
+export async function onRequestOptions() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
 export async function onRequestPost({ request, env }) {
+  const json = (data, status = 200) =>
+    new Response(JSON.stringify(data), {
+      status,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+    });
+
   try {
-    // Verify shared secret to prevent unauthorized calls
     const authHeader = request.headers.get('x-webhook-secret');
     if (authHeader !== env.WEBHOOK_SECRET) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { 'Content-Type': 'application/json' },
-      });
+      return json({ error: 'Unauthorized' }, 401);
     }
 
     const body = await request.json();
     const { first_name, last_name, clinic_name, email, phone, clinic_type, message } = body;
 
     if (!email && !phone) {
-      return new Response(JSON.stringify({ error: 'email or phone required' }), {
-        status: 400, headers: { 'Content-Type': 'application/json' },
-      });
+      return json({ error: 'email or phone required' }, 400);
     }
 
-    // Create the clinic/lead in D1
-    const clinicId = uid();
+    const clinicId   = uid();
     const contactName = [first_name, last_name].filter(Boolean).join(' ');
-    const name = clinic_name || contactName || 'New Inquiry';
+    const name        = clinic_name || contactName || 'New Inquiry';
 
     await env.DB.prepare(`
       INSERT INTO clinics (
@@ -92,12 +112,11 @@ export async function onRequestPost({ request, env }) {
     const seq = sequences.find(s => s.trigger === 'form_inquiry' && s.active);
 
     if (!seq) {
-      return new Response(JSON.stringify({ ok: true, clinicId, note: 'No active form_inquiry sequence found' }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return json({ ok: true, clinicId, note: 'No active form_inquiry sequence found' });
     }
 
-    // Build the follow-up entry
+    const templateVars = { first_name, last_name, clinic_name: name, email, phone };
+
     const now = Date.now();
     const fu = {
       id: uid(),
@@ -117,10 +136,10 @@ export async function onRequestPost({ request, env }) {
       try {
         if (step0.channel === 'email') {
           if (!email) throw new Error('no email on file');
-          await sendEmail(email, step0.subject, step0.body, env);
+          await sendEmail(email, applyTemplate(step0.subject, templateVars), applyTemplate(step0.body, templateVars), env);
         } else {
           if (!phone) throw new Error('no phone on file');
-          await sendSms(phone, step0.body, env);
+          await sendSms(phone, applyTemplate(step0.body, templateVars), env);
         }
         fu.steps[0] = { ...step0, status: 'sent', sentAt: Date.now() };
         fu.currentStep = 1;
@@ -129,17 +148,12 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
-    // Save follow-up to clinic
     await env.DB.prepare(
-      "UPDATE clinics SET follow_ups = ? WHERE id = ?"
+      'UPDATE clinics SET follow_ups = ? WHERE id = ?'
     ).bind(JSON.stringify([fu]), clinicId).run();
 
-    return new Response(JSON.stringify({ ok: true, clinicId }), {
-      status: 201, headers: { 'Content-Type': 'application/json' },
-    });
+    return json({ ok: true, clinicId }, 201);
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500, headers: { 'Content-Type': 'application/json' },
-    });
+    return json({ error: err.message }, 500);
   }
 }

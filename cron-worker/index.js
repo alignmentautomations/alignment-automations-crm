@@ -7,6 +7,18 @@ function delayMs(delay, unit) {
   }
 }
 
+function applyTemplate(text, clinic) {
+  if (!text) return text;
+  const firstName = (clinic.contact_name || '').split(' ')[0] || '';
+  const lastName  = (clinic.contact_name || '').split(' ').slice(1).join(' ') || '';
+  return text
+    .replace(/\{\{first_name\}\}/gi, firstName)
+    .replace(/\{\{last_name\}\}/gi, lastName)
+    .replace(/\{\{clinic_name\}\}/gi, clinic.name || '')
+    .replace(/\{\{email\}\}/gi, clinic.contact_email || '')
+    .replace(/\{\{phone\}\}/gi, clinic.contact_phone || '');
+}
+
 async function sendEmail(to, subject, body, env) {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -49,7 +61,7 @@ async function sendSms(to, body, env) {
 export default {
   async scheduled(event, env, ctx) {
     const { results: clinics } = await env.DB.prepare(
-      'SELECT id, contact_email, contact_phone, follow_ups FROM clinics'
+      'SELECT id, name, contact_name, contact_email, contact_phone, follow_ups FROM clinics'
     ).all();
 
     for (const clinic of clinics) {
@@ -63,7 +75,6 @@ export default {
           const step = fu.steps[i];
           if (step.status !== 'pending') continue;
 
-          // Each step fires after its delay relative to the previous step's sentAt
           const prevSentAt = i === 0 ? fu.triggeredAt : fu.steps[i - 1]?.sentAt;
           if (!prevSentAt) break;
 
@@ -72,10 +83,15 @@ export default {
           try {
             if (step.channel === 'email') {
               if (!clinic.contact_email) throw new Error('no email on file');
-              await sendEmail(clinic.contact_email, step.subject, step.body, env);
+              await sendEmail(
+                clinic.contact_email,
+                applyTemplate(step.subject, clinic),
+                applyTemplate(step.body, clinic),
+                env
+              );
             } else {
               if (!clinic.contact_phone) throw new Error('no phone on file');
-              await sendSms(clinic.contact_phone, step.body, env);
+              await sendSms(clinic.contact_phone, applyTemplate(step.body, clinic), env);
             }
             fu.steps[i] = { ...step, status: 'sent', sentAt: Date.now() };
             fu.currentStep = i + 1;
@@ -83,7 +99,7 @@ export default {
             fu.steps[i] = { ...step, status: 'failed', sentAt: Date.now(), error: err.message };
           }
           changed = true;
-          break; // one step per follow-up per run
+          break;
         }
 
         if (fu.steps.every(s => s.status === 'sent' || s.status === 'failed')) {
