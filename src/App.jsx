@@ -690,7 +690,7 @@ function LaunchModal({ clinic, sequences, prefillTrigger, onLaunch, onClose }) {
     const fu = {
       id: uid(), seqId: seq.id, seqName: seq.name, trigger: trigger.id,
       triggeredAt: Date.now(), status: "active", currentStep: 0, totalSteps: seq.steps.length,
-      steps: seq.steps.map((s, i) => ({ ...s, sentAt: i === 0 ? Date.now() : null, status: i === 0 ? "sent" : "pending" })),
+      steps: seq.steps.map(s => ({ ...s, sentAt: null, status: "pending" })),
     };
     setLaunched(true);
     setTimeout(() => { onLaunch(fu); onClose(); }, 1600);

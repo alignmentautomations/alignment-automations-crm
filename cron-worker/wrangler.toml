@@ -1,0 +1,11 @@
+name = "alignment-automations-cron"
+main = "index.js"
+compatibility_date = "2026-02-19"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "alignment-automations-db"
+database_id = "b628ecb8-e56b-4c94-a6c0-605c810a45df"

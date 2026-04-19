@@ -9,6 +9,54 @@ function parseClinic(c) {
   };
 }
 
+function delayMs(delay, unit) {
+  switch (unit) {
+    case 'minutes': return delay * 60 * 1000;
+    case 'hours':   return delay * 60 * 60 * 1000;
+    case 'days':    return delay * 24 * 60 * 60 * 1000;
+    default:        return delay * 60 * 60 * 1000;
+  }
+}
+
+async function sendEmail(to, subject, body, env) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: env.FROM_EMAIL,
+      to: [to],
+      subject: subject || '(no subject)',
+      text: body || '',
+    }),
+  });
+  if (!res.ok) throw new Error(`Resend: ${await res.text()}`);
+}
+
+async function sendSms(to, body, env) {
+  const digits = to.replace(/\D/g, '');
+  const toNumber = digits.startsWith('1') ? `+${digits}` : `+1${digits}`;
+  const creds = btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`);
+  const res = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${creds}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        From: env.TWILIO_FROM_NUMBER,
+        To: toNumber,
+        Body: body || '',
+      }).toString(),
+    }
+  );
+  if (!res.ok) throw new Error(`Twilio: ${await res.text()}`);
+}
+
 export async function onRequestPatch({ params, request, env }) {
   try {
     const { id } = params;
@@ -38,6 +86,44 @@ export async function onRequestPatch({ params, request, env }) {
     await env.DB.prepare(
       `UPDATE clinics SET ${updates.join(', ')} WHERE id = ?`
     ).bind(...values, id).run();
+
+    // Immediately send any step 0s with delay=0 that are still pending
+    if (patch.followUps !== undefined) {
+      const { results: rows } = await env.DB.prepare(
+        'SELECT contact_email, contact_phone, follow_ups FROM clinics WHERE id = ?'
+      ).bind(id).all();
+      const clinic = rows[0];
+      const followUps = clinic.follow_ups ? JSON.parse(clinic.follow_ups) : [];
+      let changed = false;
+
+      for (const fu of followUps) {
+        if (fu.status !== 'active') continue;
+        const step = fu.steps[0];
+        if (!step || step.status !== 'pending') continue;
+        if (delayMs(step.delay, step.delayUnit) > 0) continue;
+
+        try {
+          if (step.channel === 'email') {
+            if (!clinic.contact_email) throw new Error('no email on file');
+            await sendEmail(clinic.contact_email, step.subject, step.body, env);
+          } else {
+            if (!clinic.contact_phone) throw new Error('no phone on file');
+            await sendSms(clinic.contact_phone, step.body, env);
+          }
+          fu.steps[0] = { ...step, status: 'sent', sentAt: Date.now() };
+          fu.currentStep = 1;
+        } catch (err) {
+          fu.steps[0] = { ...step, status: 'failed', sentAt: Date.now(), error: err.message };
+        }
+        changed = true;
+      }
+
+      if (changed) {
+        await env.DB.prepare(
+          'UPDATE clinics SET follow_ups = ? WHERE id = ?'
+        ).bind(JSON.stringify(followUps), id).run();
+      }
+    }
 
     const { results } = await env.DB.prepare('SELECT * FROM clinics WHERE id = ?').bind(id).all();
     return new Response(JSON.stringify(parseClinic(results[0])), {
