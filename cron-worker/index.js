@@ -61,7 +61,7 @@ async function sendSms(to, body, env) {
 export default {
   async scheduled(event, env, ctx) {
     const { results: clinics } = await env.DB.prepare(
-      'SELECT id, name, contact_name, contact_email, contact_phone, follow_ups FROM clinics'
+      'SELECT id, name, contact_name, contact_email, contact_phone, follow_ups, sms_consent, sms_opted_out FROM clinics'
     ).all();
 
     for (const clinic of clinics) {
@@ -91,6 +91,8 @@ export default {
               );
             } else {
               if (!clinic.contact_phone) throw new Error('no phone on file');
+              if (!clinic.sms_consent)   throw new Error('no SMS consent on file');
+              if (clinic.sms_opted_out)  throw new Error('contact has opted out');
               await sendSms(clinic.contact_phone, applyTemplate(step.body, clinic), env);
             }
             fu.steps[i] = { ...step, status: 'sent', sentAt: Date.now() };

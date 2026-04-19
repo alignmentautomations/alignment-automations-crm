@@ -87,22 +87,25 @@ export async function onRequestPost({ request, env }) {
     }
 
     const body = await request.json();
-    const { first_name, last_name, clinic_name, email, phone, clinic_type, message } = body;
+    const { first_name, last_name, clinic_name, email, phone, clinic_type, message, sms_consent, sms_consent_at } = body;
 
     if (!email && !phone) {
       return json({ error: 'email or phone required' }, 400);
     }
 
-    const clinicId   = uid();
+    const clinicId    = uid();
     const contactName = [first_name, last_name].filter(Boolean).join(' ');
     const name        = clinic_name || contactName || 'New Inquiry';
+    const consentVal  = sms_consent ? 1 : 0;
+    const consentAt   = sms_consent ? (sms_consent_at || new Date().toISOString()) : null;
 
     await env.DB.prepare(`
       INSERT INTO clinics (
         id, name, contact_name, contact_email, contact_phone,
-        status, alignment_tasks, clinic_tasks, follow_ups, created_at
-      ) VALUES (?, ?, ?, ?, ?, 'lead', '[]', '[]', '[]', datetime('now'))
-    `).bind(clinicId, name, contactName, email || null, phone || null).run();
+        status, alignment_tasks, clinic_tasks, follow_ups,
+        sms_consent, sms_consent_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, 'lead', '[]', '[]', '[]', ?, ?, datetime('now'))
+    `).bind(clinicId, name, contactName, email || null, phone || null, consentVal, consentAt).run();
 
     // Find the active Form Inquiry sequence
     const { results: seqRows } = await env.DB.prepare(
@@ -139,6 +142,7 @@ export async function onRequestPost({ request, env }) {
           await sendEmail(email, applyTemplate(step0.subject, templateVars), applyTemplate(step0.body, templateVars), env);
         } else {
           if (!phone) throw new Error('no phone on file');
+          if (!sms_consent) throw new Error('no SMS consent on file');
           await sendSms(phone, applyTemplate(step0.body, templateVars), env);
         }
         fu.steps[0] = { ...step0, status: 'sent', sentAt: Date.now() };

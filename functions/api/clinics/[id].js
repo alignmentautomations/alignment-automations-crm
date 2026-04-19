@@ -102,7 +102,7 @@ export async function onRequestPatch({ params, request, env }) {
     // Immediately send any step 0s with delay=0 that are still pending
     if (patch.followUps !== undefined) {
       const { results: rows } = await env.DB.prepare(
-        'SELECT contact_email, contact_phone, follow_ups FROM clinics WHERE id = ?'
+        'SELECT name, contact_name, contact_email, contact_phone, follow_ups, sms_consent, sms_opted_out FROM clinics WHERE id = ?'
       ).bind(id).all();
       const clinic = rows[0];
       const followUps = clinic.follow_ups ? JSON.parse(clinic.follow_ups) : [];
@@ -120,6 +120,8 @@ export async function onRequestPatch({ params, request, env }) {
             await sendEmail(clinic.contact_email, applyTemplate(step.subject, clinic), applyTemplate(step.body, clinic), env);
           } else {
             if (!clinic.contact_phone) throw new Error('no phone on file');
+            if (!clinic.sms_consent)   throw new Error('no SMS consent on file');
+            if (clinic.sms_opted_out)  throw new Error('contact has opted out');
             await sendSms(clinic.contact_phone, applyTemplate(step.body, clinic), env);
           }
           fu.steps[0] = { ...step, status: 'sent', sentAt: Date.now() };
