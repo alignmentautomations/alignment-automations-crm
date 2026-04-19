@@ -87,7 +87,7 @@ export async function onRequestPost({ request, env }) {
     }
 
     const body = await request.json();
-    const { first_name, last_name, clinic_name, email, phone, clinic_type, message, sms_consent, sms_consent_at } = body;
+    const { first_name, last_name, clinic_name, email, phone, clinic_type, package: pkg, message, sms_consent, sms_consent_at } = body;
 
     if (!email && !phone) {
       return json({ error: 'email or phone required' }, 400);
@@ -101,11 +101,11 @@ export async function onRequestPost({ request, env }) {
 
     await env.DB.prepare(`
       INSERT INTO clinics (
-        id, name, contact_name, contact_email, contact_phone,
+        id, name, contact_name, contact_email, contact_phone, package,
         status, alignment_tasks, clinic_tasks, follow_ups,
         sms_consent, sms_consent_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, 'lead', '[]', '[]', '[]', ?, ?, datetime('now'))
-    `).bind(clinicId, name, contactName, email || null, phone || null, consentVal, consentAt).run();
+      ) VALUES (?, ?, ?, ?, ?, ?, 'lead', '[]', '[]', '[]', ?, ?, datetime('now'))
+    `).bind(clinicId, name, contactName, email || null, phone || null, pkg || null, consentVal, consentAt).run();
 
     // Find the active Form Inquiry sequence
     const { results: seqRows } = await env.DB.prepare(
@@ -133,9 +133,9 @@ export async function onRequestPost({ request, env }) {
       steps: seq.steps.map(s => ({ ...s, sentAt: null, status: 'pending' })),
     };
 
-    // Immediately send step 0 if delay is 0
+    // Always send step 0 immediately for form submissions — real-time response is critical
     const step0 = fu.steps[0];
-    if (step0 && delayMs(step0.delay, step0.delayUnit) === 0) {
+    if (step0) {
       try {
         if (step0.channel === 'email') {
           if (!email) throw new Error('no email on file');
