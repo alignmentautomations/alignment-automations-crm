@@ -96,9 +96,12 @@ export async function onRequestPost({ request, env }) {
       status: 200, headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    const status = err.code === "NO_API_KEY" ? 400 : err.code === "PLACES_API_ERROR" ? 502 : 500;
-    return new Response(JSON.stringify({ error: err.message }), {
-      status, headers: { "Content-Type": "application/json" },
+    console.error("prospects/search failed:", err.code, err.status, err.message);
+    // Cloudflare's edge overlays its own generic page for 5xx origin responses,
+    // hiding the real error from the client — use 200 with an error field
+    // instead so the actual message reaches the frontend for display.
+    return new Response(JSON.stringify({ error: err.message, code: err.code }), {
+      status: 200, headers: { "Content-Type": "application/json" },
     });
   }
 }

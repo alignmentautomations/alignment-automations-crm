@@ -330,7 +330,10 @@ const prospectsDb = {
       body: JSON.stringify({ trade, location }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Search failed");
+    // Errors come back as 200 with an `error` field, not a non-2xx status —
+    // Cloudflare's edge overlays its own generic page for 5xx origin
+    // responses, which would hide the real message from the user.
+    if (!res.ok || data.error) throw new Error(data.error || "Search failed");
     return data;
   },
   async update(id, patch) {
