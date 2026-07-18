@@ -40,8 +40,12 @@ export async function searchContractors({ trade, location, apiKey }) {
   });
 
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    const err = new Error(`Places API request failed (${res.status}): ${body}`);
+    const body = await res.text().catch((e) => `<text() failed: ${e.message}>`);
+    const headerDump = [...res.headers.entries()].map(([k, v]) => `${k}=${v}`).join(", ");
+    const err = new Error(
+      `Places API request failed (${res.status} ${res.statusText}), ` +
+      `keyLen=${apiKey.length}, headers=[${headerDump}], body=${JSON.stringify(body)}`
+    );
     err.code = "PLACES_API_ERROR";
     err.status = res.status;
     throw err;
