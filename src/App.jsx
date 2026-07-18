@@ -2555,7 +2555,12 @@ function ProspectingView({ onToast }) {
     setSearchStatus(`Searching for ${trade} in ${location}…`);
     try {
       const data = await prospectsDb.search(trade, location.trim());
-      setSearchStatus(`Added ${data.added} new prospect(s), skipped ${data.skipped} already known.`);
+      if (data.added === 0 && data.skipped === 0) {
+        // Searches are US-only; a bare/ambiguous city often resolves abroad.
+        setSearchStatus(`No U.S. results for "${trade} in ${location.trim()}". Try adding the state, e.g. "Springfield, MO".`);
+      } else {
+        setSearchStatus(`Added ${data.added} new prospect(s), skipped ${data.skipped} already in your list.`);
+      }
       const fresh = await prospectsDb.getAll();
       setProspects(fresh);
     } catch (err) {
@@ -2658,7 +2663,7 @@ function ProspectingView({ onToast }) {
           <select className="form-select" value={trade} onChange={e => setTrade(e.target.value)}>
             {PROSPECT_TRADES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
-          <input className="form-input" placeholder="City / area, e.g. San Luis Obispo, CA" value={location} onChange={e => setLocation(e.target.value)} />
+          <input className="form-input" placeholder="City + state, e.g. San Luis Obispo, CA" value={location} onChange={e => setLocation(e.target.value)} />
           <button className="btn-primary" type="submit" disabled={searching}>{searching ? "Searching…" : "Search"}</button>
         </form>
         {searchStatus && <div className="page-subtitle" style={{ marginBottom: 12 }}>{searchStatus}</div>}

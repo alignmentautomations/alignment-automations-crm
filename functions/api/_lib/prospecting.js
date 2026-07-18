@@ -11,6 +11,7 @@ const FIELD_MASK = [
   "places.id",
   "places.displayName",
   "places.formattedAddress",
+  "places.addressComponents",
   "places.internationalPhoneNumber",
   "places.nationalPhoneNumber",
   "places.websiteUri",
@@ -20,6 +21,18 @@ const FIELD_MASK = [
   "places.googleMapsUri",
   "places.types",
 ].join(",");
+
+// The business only prospects in the US. Google's Text Search neither
+// restricts by country on its own nor honors `regionCode` as a hard filter
+// (a bare "London" still returns UK results even with regionCode: "US") — so
+// we bias with regionCode AND hard-filter results by the country address
+// component, which reliably carries a 2-letter code ("US", "GB", ...).
+const SEARCH_COUNTRY = "US";
+
+function countryOf(place) {
+  const c = (place.addressComponents || []).find((a) => (a.types || []).includes("country"));
+  return c ? c.shortText : null;
+}
 
 export async function searchContractors({ trade, location, apiKey }) {
   if (!apiKey) {
@@ -36,7 +49,7 @@ export async function searchContractors({ trade, location, apiKey }) {
       "X-Goog-Api-Key": apiKey,
       "X-Goog-FieldMask": FIELD_MASK,
     },
-    body: JSON.stringify({ textQuery, pageSize: 20 }),
+    body: JSON.stringify({ textQuery, pageSize: 20, regionCode: SEARCH_COUNTRY }),
   });
 
   if (!res.ok) {
@@ -48,7 +61,7 @@ export async function searchContractors({ trade, location, apiKey }) {
   }
 
   const data = await res.json();
-  const places = data.places || [];
+  const places = (data.places || []).filter((p) => countryOf(p) === SEARCH_COUNTRY);
 
   return places.map((p) => ({
     placeId: p.id,
