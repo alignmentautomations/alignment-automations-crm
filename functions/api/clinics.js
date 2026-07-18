@@ -31,8 +31,9 @@ export async function onRequestPost({ request, env }) {
       INSERT INTO clinics (
         id, name, contact_name, contact_email, contact_phone,
         website, package, status, start_date,
-        alignment_tasks, clinic_tasks, follow_ups, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        alignment_tasks, clinic_tasks, follow_ups,
+        industry, source, priority, lead_note, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     `).bind(
       clinic.id,
       clinic.name,
@@ -45,7 +46,11 @@ export async function onRequestPost({ request, env }) {
       clinic.start_date    || null,
       JSON.stringify(clinic.alignmentTasks || []),
       JSON.stringify(clinic.clinicTasks    || []),
-      JSON.stringify(clinic.followUps      || [])
+      JSON.stringify(clinic.followUps      || []),
+      clinic.industry      || null,
+      clinic.source        || null,
+      clinic.priority      || null,
+      clinic.lead_note     || null
     ).run();
     return new Response(JSON.stringify(clinic), {
       status: 201, headers: { 'Content-Type': 'application/json' },

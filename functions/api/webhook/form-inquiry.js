@@ -22,50 +22,81 @@ function delayMs(delay, unit) {
 function applyTemplate(text, vars) {
   if (!text) return text;
   return text
-    .replace(/\{\{first_name\}\}/gi, vars.first_name || '')
+    .replace(/\{\{first_name\}\}/gi, vars.first_name || 'there')
     .replace(/\{\{last_name\}\}/gi,  vars.last_name  || '')
-    .replace(/\{\{clinic_name\}\}/gi, vars.clinic_name || '')
+    .replace(/\{\{clinic_name\}\}/gi,   vars.clinic_name   || '')
+    .replace(/\{\{business_name\}\}/gi, vars.business_name || vars.clinic_name || '')
     .replace(/\{\{email\}\}/gi,      vars.email       || '')
     .replace(/\{\{phone\}\}/gi,      vars.phone       || '');
 }
 
-async function sendEmail(to, subject, body, env) {
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: env.FROM_EMAIL,
-      to: [to],
-      subject: subject || '(no subject)',
-      text: body || '',
-    }),
-  });
-  if (!res.ok) throw new Error(`Resend: ${await res.text()}`);
+// Converts the plain-text template body into the branded HTML shell.
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function textToHtml(text) {
+  let out = escapeHtml(text || '');
+  out = out.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" style="color:#0066CC;text-decoration:underline;">$1</a>');
+  return out.replace(/\n/g, '<br>');
+}
+function wrapEmailHtml(bodyText) {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
+  </head>
+  <body style="margin:0;padding:0;background:#F4F7FB;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F7FB;padding:32px 16px;">
+      <tr><td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#FFFFFF;border:1px solid #E2E9F1;border-radius:14px;overflow:hidden;">
+          <tr><td style="padding:22px 28px;border-bottom:1px solid #E2E9F1;">
+            <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+              <td style="width:56px;height:56px;background-image:url('https://app.alignmentautomations.com/logo-email.png?v=6');background-size:52px 52px;background-repeat:no-repeat;background-position:center;text-align:center;"></td>
+              <td style="padding-left:12px;font-family:Arial,sans-serif;font-size:16px;">
+                <span style="font-weight:700;color:#1A1A1A;">Alignment</span><span style="font-weight:400;color:#0066CC;"> Automations</span>
+              </td>
+            </tr></table>
+          </td></tr>
+          <tr><td style="padding:28px;font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#242A2E;">
+            ${textToHtml(bodyText)}
+          </td></tr>
+          <tr><td style="padding:16px 28px;border-top:1px solid #E2E9F1;font-family:Arial,sans-serif;font-size:12px;color:#8A929C;">
+            Alignment Automations &middot; alignment.automations@gmail.com
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`;
 }
 
-async function sendSms(to, body, env) {
-  const digits = to.replace(/\D/g, '');
-  const toNumber = digits.startsWith('1') ? `+${digits}` : `+1${digits}`;
-  const creds = btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`);
-  const res = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${creds}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        From: env.TWILIO_FROM_NUMBER,
-        To: toNumber,
-        Body: body || '',
-      }).toString(),
-    }
-  );
-  if (!res.ok) throw new Error(`Twilio: ${await res.text()}`);
+// Sends through the Google Apps Script relay (google-apps-script/mail-relay.gs),
+// which calls GmailApp.sendEmail from alignment.automations@gmail.com — this
+// makes Gmail recognize the sender as a real Google Account and show its
+// profile photo as the avatar to recipients viewing in Gmail.
+async function sendEmail(to, subject, body, env) {
+  if (!env.APPSSCRIPT_URL)    throw new Error('APPSSCRIPT_URL is not set');
+  if (!env.APPSSCRIPT_SECRET) throw new Error('APPSSCRIPT_SECRET is not set');
+  const res = await fetch(env.APPSSCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      secret: env.APPSSCRIPT_SECRET,
+      to,
+      from: env.FROM_EMAIL,
+      subject: subject || '(no subject)',
+      text: body || '',
+      html: wrapEmailHtml(body || ''),
+    }),
+  });
+  const raw = await res.text();
+  let json = null;
+  try { json = JSON.parse(raw); } catch (_) {}
+  if (!res.ok || !json?.ok) {
+    throw new Error(`Apps Script relay rejected send (HTTP ${res.status}): ${raw}`);
+  }
+  return json;
 }
 
 // Handle CORS preflight
@@ -87,45 +118,44 @@ export async function onRequestPost({ request, env }) {
     }
 
     const body = await request.json();
-    const { first_name, last_name, clinic_name, email, phone, clinic_type, package: pkg, message, sms_consent, sms_consent_at } = body;
+    // Accept business_name (current) or clinic_name (legacy) from the inbound form.
+    const { first_name, last_name, email, phone, package: pkg } = body;
+    const businessName = body.business_name || body.clinic_name;
 
-    if (!email && !phone) {
-      return json({ error: 'email or phone required' }, 400);
+    if (!email) {
+      return json({ error: 'email required' }, 400);
     }
 
     const clinicId    = uid();
     const contactName = [first_name, last_name].filter(Boolean).join(' ');
-    const name        = clinic_name || contactName || 'New Inquiry';
-    const consentVal  = sms_consent ? 1 : 0;
-    const consentAt   = sms_consent ? (sms_consent_at || new Date().toISOString()) : null;
+    const name        = businessName || contactName || 'New Inquiry';
 
     await env.DB.prepare(`
       INSERT INTO clinics (
         id, name, contact_name, contact_email, contact_phone, package,
-        status, alignment_tasks, clinic_tasks, follow_ups,
-        sms_consent, sms_consent_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 'lead', '[]', '[]', '[]', ?, ?, datetime('now'))
-    `).bind(clinicId, name, contactName, email || null, phone || null, pkg || null, consentVal, consentAt).run();
+        status, alignment_tasks, clinic_tasks, follow_ups, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, 'lead', '[]', '[]', '[]', datetime('now'))
+    `).bind(clinicId, name, contactName, email || null, phone || null, pkg || null).run();
 
-    // Find the active Form Inquiry sequence
+    // Find the active Website Inquiry sequence
     const { results: seqRows } = await env.DB.prepare(
       "SELECT data FROM sequences WHERE id = 'all'"
     ).all();
     const sequences = seqRows[0]?.data ? JSON.parse(seqRows[0].data) : [];
-    const seq = sequences.find(s => s.trigger === 'form_inquiry' && s.active);
+    const seq = sequences.find(s => s.trigger === 'website_inquiry' && s.active);
 
     if (!seq) {
-      return json({ ok: true, clinicId, note: 'No active form_inquiry sequence found' });
+      return json({ ok: true, clinicId, note: 'No active website_inquiry sequence found' });
     }
 
-    const templateVars = { first_name, last_name, clinic_name: name, email, phone };
+    const templateVars = { first_name, last_name, clinic_name: name, business_name: name, email, phone };
 
     const now = Date.now();
     const fu = {
       id: uid(),
       seqId: seq.id,
       seqName: seq.name,
-      trigger: 'form_inquiry',
+      trigger: 'website_inquiry',
       triggeredAt: now,
       status: 'active',
       currentStep: 0,
@@ -137,14 +167,8 @@ export async function onRequestPost({ request, env }) {
     const step0 = fu.steps[0];
     if (step0) {
       try {
-        if (step0.channel === 'email') {
-          if (!email) throw new Error('no email on file');
-          await sendEmail(email, applyTemplate(step0.subject, templateVars), applyTemplate(step0.body, templateVars), env);
-        } else {
-          if (!phone) throw new Error('no phone on file');
-          if (!sms_consent) throw new Error('no SMS consent on file');
-          await sendSms(phone, applyTemplate(step0.body, templateVars), env);
-        }
+        if (!email) throw new Error('no email on file');
+        await sendEmail(email, applyTemplate(step0.subject, templateVars), applyTemplate(step0.body, templateVars), env);
         fu.steps[0] = { ...step0, status: 'sent', sentAt: Date.now() };
         fu.currentStep = 1;
       } catch (err) {

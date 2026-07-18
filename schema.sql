@@ -1,3 +1,7 @@
+-- Authoritative schema for the Alignment Automations CRM (Cloudflare D1).
+-- Recreate the database with:
+--   wrangler d1 execute alignment-automations-db --remote --file schema.sql
+
 CREATE TABLE IF NOT EXISTS clinics (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -8,7 +12,67 @@ CREATE TABLE IF NOT EXISTS clinics (
   package TEXT,
   status TEXT DEFAULT 'lead',
   start_date TEXT,
-  alignment_tasks TEXT DEFAULT '[]',
-  clinic_tasks TEXT DEFAULT '[]',
+  alignment_tasks TEXT DEFAULT '[]',   -- JSON array of Matthew's tasks
+  clinic_tasks    TEXT DEFAULT '[]',   -- JSON array of client tasks
+  follow_ups      TEXT DEFAULT '[]',   -- JSON array of launched email sequences
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  -- Prospecting fields (from the outreach playbook)
+  industry  TEXT,   -- trade: Painting, HVAC, Roofing, ...
+  source    TEXT,   -- where the lead was found
+  priority  TEXT,   -- hot | warm | cold
+  lead_note TEXT,   -- the "leak/angle" to show on camera
+
+  -- Legacy SMS columns (kept for compatibility; the app is email-only).
+  sms_consent      INTEGER  DEFAULT 0,
+  sms_consent_at   DATETIME DEFAULT NULL,
+  sms_opted_out    INTEGER  DEFAULT 0,
+  sms_opted_out_at DATETIME DEFAULT NULL
+);
+
+-- All follow-up sequences are stored as a single JSON document in the row id='all'.
+CREATE TABLE IF NOT EXISTS sequences (
+  id   TEXT PRIMARY KEY,
+  data TEXT NOT NULL,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Prospecting: scored leads found via the Prospecting page, before they're
+-- pushed into `clinics`. See migrate_prospects.sql.
+CREATE TABLE IF NOT EXISTS prospects (
+  id TEXT PRIMARY KEY,
+  place_id TEXT UNIQUE,                 -- Google Places id; dedups repeated searches
+
+  business_name TEXT NOT NULL,
+  trade TEXT,                           -- lowercase search key, e.g. "painter" (matches INDUSTRY_MAP)
+  search_location TEXT,
+  address TEXT,
+  phone TEXT,
+  email TEXT,                           -- scraped from site if found; user-editable
+  website TEXT,
+  rating REAL,
+  review_count INTEGER,
+  business_status TEXT,
+  google_maps_url TEXT,
+
+  website_check TEXT DEFAULT '{}',      -- JSON: {attempted, reachable, statusCode, loadTimeMs,
+                                         --   mobileFriendly, agencyDetected, builderPlatform, email,
+                                         --   social:{facebook,instagram,twitter,linkedin}}
+  manual_signals TEXT DEFAULT '{"runsAds":false,"growthIntent":false,"ownerOperated":false}',
+
+  score INTEGER DEFAULT 0,
+  tier TEXT,                            -- "Record today" | "Warm" | "Park it"
+
+  channel TEXT,
+  leak_flagged TEXT,
+  date_sent TEXT,
+  watched INTEGER DEFAULT 0,
+  replied INTEGER DEFAULT 0,
+  next_follow_up TEXT,
+  outreach_stage TEXT DEFAULT 'New',
+
+  pushed_clinic_id TEXT DEFAULT NULL,   -- set once pushed to the pipeline; NULL = not yet pushed
+  pushed_at DATETIME DEFAULT NULL,
+
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

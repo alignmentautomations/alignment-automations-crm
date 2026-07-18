@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Alignment Automations — Sales Script</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0b111e;--ink-2:#0f1829;--ink-3:#111d30;
+  --paper:#F7F8FB;--white:#fff;--line:#E4E8F0;
+  --slate:#46536b;--slate-2:#6b7790;
+  --blue:#3a7bfd;--blue-deep:#0066CC;--blue-light:#5aa3ff;--green:#34c98e;
+  --display:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+@page{size:Letter;margin:15mm 14mm}
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:var(--display);color:var(--ink);font-size:11pt;line-height:1.55;background:var(--white)}
+
+/* Cover header band */
+.masthead{background:var(--ink);color:#fff;border-radius:14px;padding:26px 28px;position:relative;overflow:hidden;margin-bottom:26px}
+.masthead::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 85% 10%,rgba(90,163,255,.16),transparent 60%);pointer-events:none}
+.brand{display:flex;align-items:center;gap:11px;margin-bottom:20px;position:relative}
+.brand svg{width:34px;height:34px;flex:none}
+.brand span{font-weight:700;font-size:14pt;letter-spacing:-.01em}
+.eyebrow{font-family:var(--mono);font-size:8.5pt;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:var(--blue-light);display:flex;align-items:center;gap:9px;margin-bottom:12px}
+.eyebrow::before{content:"";width:22px;height:2px;background:var(--blue);display:inline-block}
+.masthead h1{font-size:27pt;font-weight:800;letter-spacing:-.02em;line-height:1.05;position:relative;margin-bottom:8px}
+.masthead .sub{color:#aab4c8;font-size:10.5pt;max-width:480px;position:relative}
+
+/* Big idea callout */
+.bigidea{background:rgba(58,123,253,.07);border:1px solid rgba(58,123,253,.25);border-radius:12px;padding:16px 18px;margin-bottom:26px;break-inside:avoid}
+.bigidea .lbl{font-family:var(--mono);font-size:8pt;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:var(--blue-deep);margin-bottom:5px}
+.bigidea p{font-size:12pt;font-weight:600;color:var(--ink);line-height:1.45}
+
+/* Section */
+section{margin-bottom:22px;break-inside:avoid}
+.sec-head{display:flex;align-items:baseline;gap:11px;margin-bottom:9px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.sec-num{font-family:var(--mono);font-size:9pt;font-weight:600;color:var(--blue-deep)}
+.sec-head h2{font-size:14pt;font-weight:700;letter-spacing:-.01em}
+.note{color:var(--slate);font-size:10pt;margin:6px 0 10px}
+.note strong{color:var(--ink)}
+
+/* "Say this" script lines */
+.say{background:var(--paper);border-left:3px solid var(--blue);border-radius:0 8px 8px 0;padding:11px 15px;margin:8px 0;font-size:11pt;color:var(--ink);line-height:1.5;break-inside:avoid}
+.say .tag{display:block;font-family:var(--mono);font-size:7.5pt;letter-spacing:.12em;text-transform:uppercase;color:var(--blue-deep);font-weight:600;margin-bottom:4px}
+
+/* generic bullet lists */
+ul{list-style:none;margin:6px 0 6px}
+li{font-size:10.5pt;color:var(--slate);padding-left:18px;position:relative;margin-bottom:5px;line-height:1.45}
+li::before{content:"";position:absolute;left:0;top:8px;width:7px;height:7px;border-left:2px solid var(--blue);border-bottom:2px solid var(--blue);transform:rotate(-45deg);top:5px}
+li strong{color:var(--ink)}
+
+/* checklist */
+ul.check li::before{content:"";border:1.5px solid var(--slate-2);border-radius:3px;width:11px;height:11px;transform:none;top:3px;border-left-width:1.5px;border-bottom-width:1.5px}
+
+/* objections */
+.obj{break-inside:avoid;margin-bottom:13px}
+.obj .q{font-weight:700;font-size:10.5pt;color:var(--ink);margin-bottom:5px;display:flex;gap:7px;align-items:flex-start}
+.obj .q::before{content:"“";color:var(--blue);font-size:15pt;line-height:.8;font-weight:800}
+
+/* tone box */
+.tone{background:var(--ink);color:#fff;border-radius:12px;padding:18px 20px;break-inside:avoid}
+.tone .lbl{font-family:var(--mono);font-size:8pt;letter-spacing:.14em;text-transform:uppercase;color:var(--blue-light);font-weight:600;margin-bottom:10px}
+.tone li{color:#c4ccdc;font-size:10pt}
+.tone li::before{border-left-color:var(--green);border-bottom-color:var(--green)}
+.tone li strong{color:#fff}
+
+footer{margin-top:24px;padding-top:12px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:8pt;color:var(--slate-2);letter-spacing:.04em}
+.pill{display:inline-block;background:rgba(52,201,142,.12);border:1px solid rgba(52,201,142,.3);color:#1f8f63;border-radius:99px;padding:3px 10px;font-family:var(--mono);font-size:7.5pt;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+</style>
+</head>
+<body>
+
+<div class="masthead">
+  <div class="brand">
+    <svg viewBox="-140 -140 280 280" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#5aa3ff"/><stop offset="100%" stop-color="#3a7bfd"/></linearGradient></defs><polygon points="0,-120 104,-60 104,60 0,120 -104,60 -104,-60" fill="url(#g)"/><rect x="-5" y="-70" width="10" height="140" rx="5" fill="#fff"/><circle cx="0" cy="0" r="28" fill="#fff"/><path d="M -10 0 L -2 8 L 14 -10" stroke="#3a7bfd" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Alignment Automations</span>
+  </div>
+  <div class="eyebrow">Sales Script</div>
+  <h1>Done-for-You Intake System</h1>
+  <p class="sub">A flexible call guide for selling the $1,500 setup + $297/mo managed package to home service contractors. It's a guide — stay conversational, listen more than you talk, and let their answers steer it.</p>
+</div>
+
+<div class="bigidea">
+  <div class="lbl">The one big idea to sell</div>
+  <p>You stay on the job. We make sure no lead slips through — and you never have to touch the tech.</p>
+</div>
+
+<section>
+  <div class="sec-head"><span class="sec-num">00</span><h2>Before the call — 30 seconds of prep</h2></div>
+  <ul class="check">
+    <li>Look at their current website (if any) and how a lead would reach them.</li>
+    <li>Try their contact form, or note if there's no easy way to book.</li>
+    <li>Know their trade so your examples are relevant.</li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">01</span><h2>Open — set the tone</h2></div>
+  <p class="note">Lower their guard, set the agenda, make it about them — not a pitch. Under a minute.</p>
+  <div class="say"><span class="tag">Say</span>"Thanks for making the time. This'll be quick — like 15 minutes. I just want to understand how leads reach you today and where they might be slipping, then I'll show you exactly what I'd set up. No pressure, no hard sell. Sound good?"</div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">02</span><h2>Discover — find the pain</h2></div>
+  <p class="note">Ask, then <strong>shut up and listen.</strong> Write down their exact words — you'll repeat them back later.</p>
+  <ul>
+    <li>"Walk me through what happens when a new customer tries to reach you right now."</li>
+    <li>"When you're up on a ladder or under a sink and the phone rings — what happens to that call?"</li>
+    <li>"Do you ever call someone back and they've already hired somebody else?"</li>
+    <li>"How are you keeping track of who reached out and whether you followed up?"</li>
+    <li>"Roughly what's a typical job worth to you?" <em>(anchors the value math later)</em></li>
+    <li>"If you missed, say, 3 calls a week — what do you think that's costing you?"</li>
+  </ul>
+  <p class="note"><strong>Listen for the money line.</strong> When they say something like "I lose jobs because I can't get to the phone" — that's the pain you sell to. Write it down verbatim.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">03</span><h2>Reframe — name the real problem</h2></div>
+  <div class="say"><span class="tag">Say</span>"Here's what most contractors don't realize: you don't have a <strong>lead</strong> problem, you have an <strong>intake</strong> problem. The jobs are coming in — they're slipping through between the call and the callback. And the job almost always goes to whoever responds first, not whoever's best at the work. You're losing to slower competitors with faster systems."</div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">04</span><h2>Present — paint the picture</h2></div>
+  <p class="note">Keep it about outcomes, not tech.</p>
+  <div class="say"><span class="tag">Say</span>"So here's what I set up for you. A customer fills out your site or calls you. If you can't pick up, they instantly get a text back — before they call the next guy. They get a link to book an estimate right on your calendar. You get a notification with their info, and every lead is logged automatically. All of it runs 24/7, even at 9pm on a Sunday."</div>
+  <div class="say"><span class="tag">Then — the differentiator</span>"And the part that matters most: <strong>you don't touch any of it.</strong> No logins, no dashboards, no accounts to manage. I set it all up, I run it, I keep it working. You just keep doing the work and show up to the estimates that land on your calendar."</div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">05</span><h2>Price — say it plainly, then stop</h2></div>
+  <div class="say"><span class="tag">Say</span>"It's one simple plan. <strong>$1,500 to set everything up, then $297 a month</strong> — and that covers everything: the website, the text-back, the follow-ups, the booking, the software it runs on, and me keeping it running. No surprise add-ons. No long-term contract — cancel anytime and it's yours."</div>
+  <p class="note">Then <strong>stop talking.</strong> Let the silence sit. Don't fill it.</p>
+  <div class="say"><span class="tag">If they flinch on price — value math</span>"If a typical job is worth $[their number], the system pays for itself the first month it saves you even one or two jobs you'd have lost. After that it's just profit you were leaving on the table."</div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">06</span><h2>Handle the common objections</h2></div>
+
+  <div class="obj">
+    <div class="q">"I already have a website."</div>
+    <div class="say">"Perfect — if it can support the system, we build right around it, same price. If it can't, I'll rebuild it at no extra charge. The plan's for the whole intake system, not just the web page."</div>
+  </div>
+
+  <div class="obj">
+    <div class="q">"That's more than I expected."</div>
+    <div class="say">"I hear you. Quick question — what's one job worth to you? … Right, so this is less than one job a month, and it's built to win you more than that. It's not a cost, it's the thing that stops the bleeding."</div>
+  </div>
+
+  <div class="obj">
+    <div class="q">"Can I just get the text-back part?"</div>
+    <div class="say">"I get why you'd ask. The reason it's one system is the pieces only work together — a text-back with nowhere to book just creates a second missed step. The website, the follow-up, and the booking are what turn that text into a job on your calendar. That's what you're paying for."</div>
+  </div>
+
+  <div class="obj">
+    <div class="q">"I need to think about it."</div>
+    <div class="say">"Totally fair. Can I ask — is it the price, the timing, or are you just not sure it'll work for your business?" <em>(Find the real objection, then address that one.)</em></div>
+  </div>
+
+  <div class="obj">
+    <div class="q">"How do I know it'll work?"</div>
+    <div class="say">"The instant response starts working the day we turn it on — your response time goes from hours to seconds. Most folks notice more booked estimates within the first few weeks. And there's no lock-in, so the risk is on me to keep earning it."</div>
+  </div>
+
+  <div class="obj">
+    <div class="q">"I'm not tech-y."</div>
+    <div class="say">"That's exactly who this is built for. There's nothing for you to run. If you can read a text and check your calendar, you're set. I handle everything else."</div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">07</span><h2>Close — assume the next step</h2></div>
+  <p class="note">Don't ask "do you want to buy?" Ask a forward-motion question.</p>
+  <div class="say"><span class="tag">Say</span>"I think this is a great fit for you. Setup takes about 5–7 days once I have what I need. Do you want to get started, or do you have any questions I haven't covered?"</div>
+  <div class="say"><span class="tag">If yes</span>"Great. I'll send over the agreement and the first invoice, plus a short intake form so I can grab your logo, photos, and a few details. Once that's back, I get to work and you'll be live within the week."</div>
+  <div class="say"><span class="tag">If "let me think"</span>"No problem. I'll send a quick summary so you've got it in writing. Can I check back in on [specific day]?" — always set the next contact, never leave it open.</div>
+</section>
+
+<div class="tone">
+  <div class="lbl">Tone reminders</div>
+  <ul>
+    <li><strong>Talk like a contractor, not a software company.</strong> Plain words — no "leverage," "solutions," "ecosystem."</li>
+    <li><strong>Sell the outcome</strong> (more booked jobs, zero hassle), not the features.</li>
+    <li><strong>Confidence, not pressure.</strong> No lock-in means you can stay relaxed — the system earns its keep.</li>
+    <li><strong>Listen 70%, talk 30%.</strong> The best close is repeating their own pain back to them.</li>
+  </ul>
+</div>
+
+<footer>
+  <span>Alignment Automations · Internal Sales Guide</span>
+  <span class="pill">$1,500 setup + $297/mo</span>
+</footer>
+
+</body>
+</html>

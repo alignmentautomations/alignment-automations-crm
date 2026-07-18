@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Alignment Automations — Onboarding Checklist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0b111e;--paper:#F7F8FB;--white:#fff;--line:#E4E8F0;
+  --slate:#46536b;--slate-2:#6b7790;
+  --blue:#3a7bfd;--blue-deep:#0066CC;--blue-light:#5aa3ff;--green:#34c98e;
+  --display:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+@page{size:Letter;margin:14mm 14mm}
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:var(--display);color:var(--ink);font-size:10.5pt;line-height:1.5;background:var(--white)}
+
+.masthead{background:var(--ink);color:#fff;border-radius:14px;padding:24px 26px;position:relative;overflow:hidden;margin-bottom:22px}
+.masthead::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 85% 10%,rgba(90,163,255,.16),transparent 60%)}
+.brand{display:flex;align-items:center;gap:11px;margin-bottom:18px;position:relative}
+.brand svg{width:32px;height:32px;flex:none}
+.brand span{font-weight:700;font-size:13pt;letter-spacing:-.01em}
+.eyebrow{font-family:var(--mono);font-size:8.5pt;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:var(--blue-light);display:flex;align-items:center;gap:9px;margin-bottom:11px}
+.eyebrow::before{content:"";width:22px;height:2px;background:var(--blue);display:inline-block}
+.masthead h1{font-size:23pt;font-weight:800;letter-spacing:-.02em;line-height:1.05;position:relative;margin-bottom:8px}
+.masthead .sub{color:#aab4c8;font-size:10pt;max-width:520px;position:relative}
+.legend{display:flex;gap:16px;margin-top:14px;position:relative;font-family:var(--mono);font-size:8pt;color:#aab4c8;letter-spacing:.04em}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.dot{width:9px;height:9px;border-radius:3px;display:inline-block}
+.dot.you{background:var(--blue)}.dot.client{background:var(--green)}
+
+section{margin-bottom:16px;break-inside:avoid}
+.sec-head{display:flex;align-items:baseline;gap:11px;margin-bottom:8px;border-bottom:1px solid var(--line);padding-bottom:7px}
+.sec-num{font-family:var(--mono);font-size:9pt;font-weight:600;color:var(--blue-deep)}
+.sec-head h2{font-size:13pt;font-weight:700;letter-spacing:-.01em}
+.sec-head .when{margin-left:auto;font-family:var(--mono);font-size:8pt;color:var(--slate-2);font-weight:500}
+.note{color:var(--slate);font-size:9.5pt;margin:4px 0 8px;font-style:italic}
+
+ul{list-style:none}
+.cl li{position:relative;padding-left:24px;margin-bottom:7px;font-size:10pt;color:var(--ink);line-height:1.4;break-inside:avoid}
+.cl li::before{content:"";position:absolute;left:0;top:1px;width:13px;height:13px;border:1.5px solid var(--slate-2);border-radius:3px}
+.who{font-family:var(--mono);font-size:7pt;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:99px;margin-right:7px;vertical-align:1px;white-space:nowrap}
+.who.you{color:var(--blue-deep);background:rgba(58,123,253,.10);border:1px solid rgba(58,123,253,.22)}
+.who.client{color:#1f8f63;background:rgba(52,201,142,.10);border:1px solid rgba(52,201,142,.26)}
+.warn{color:#b4540a;font-weight:600}
+
+.callout{background:rgba(58,123,253,.06);border:1px solid rgba(58,123,253,.22);border-radius:12px;padding:15px 18px;margin-top:6px;break-inside:avoid}
+.callout .lbl{font-family:var(--mono);font-size:8pt;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:var(--blue-deep);margin-bottom:8px}
+.callout p{font-size:9.5pt;color:var(--slate);margin-bottom:6px;padding-left:18px;position:relative}
+.callout p:last-child{margin-bottom:0}
+.callout p strong{color:var(--ink)}
+.callout p::before{content:"!";position:absolute;left:0;top:-1px;font-family:var(--mono);font-weight:700;color:#b4540a}
+
+footer{margin-top:18px;padding-top:11px;border-top:1px solid var(--line);display:flex;justify-content:space-between;font-family:var(--mono);font-size:8pt;color:var(--slate-2);letter-spacing:.04em}
+</style>
+</head>
+<body>
+
+<div class="masthead">
+  <div class="brand">
+    <svg viewBox="-140 -140 280 280" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#5aa3ff"/><stop offset="100%" stop-color="#3a7bfd"/></linearGradient></defs><polygon points="0,-120 104,-60 104,60 0,120 -104,60 -104,-60" fill="url(#g)"/><rect x="-5" y="-70" width="10" height="140" rx="5" fill="#fff"/><circle cx="0" cy="0" r="28" fill="#fff"/><path d="M -10 0 L -2 8 L 14 -10" stroke="#3a7bfd" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Alignment Automations</span>
+  </div>
+  <div class="eyebrow">Client Onboarding Checklist</div>
+  <h1>Done-for-You Intake System</h1>
+  <p class="sub">Full delivery process for the $1,500 setup + $297/mo managed package. Target setup time: 5–7 business days. Duplicate this list per client in the CRM.</p>
+  <div class="legend"><span><span class="dot you"></span>You — Alignment Automations</span><span><span class="dot client"></span>Client</span></div>
+</div>
+
+<section>
+  <div class="sec-head"><span class="sec-num">00</span><h2>Sale &amp; Agreement</h2><span class="when">Day 0</span></div>
+  <ul class="cl">
+    <li><span class="who you">You</span>Discovery call completed; confirmed it's a fit</li>
+    <li><span class="who you">You</span>Scope / proposal sent and accepted</li>
+    <li><span class="who client">Client</span>Service agreement signed — month-to-month, cancel anytime, ownership-handover-on-exit, scope of what's included</li>
+    <li><span class="who client">Client</span>First payment collected — <strong>$1,797</strong> ($1,500 setup + first $297/mo) via Stripe</li>
+    <li><span class="who you">You</span>Recurring <strong>$297/mo</strong> subscription created &amp; confirmed active</li>
+    <li><span class="who you">You</span>Client record created in CRM; this checklist attached</li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">01</span><h2>Kickoff &amp; Intake</h2><span class="when">Day 1</span></div>
+  <p class="note">Send the client ONE intake form to collect all of this:</p>
+  <ul class="cl">
+    <li><span class="who client">Client</span>Business basics: legal name, brand name, service area, trades/services, hours</li>
+    <li><span class="who client">Client</span>Logo, brand colors, 6–12 photos of real work</li>
+    <li><span class="who client">Client</span>Services list + pricing notes, top FAQs, short "about us"</li>
+    <li><span class="who client">Client</span>Google / Facebook reviews or testimonials to feature</li>
+    <li><span class="who client">Client</span>Business phone number (the line that gets missed calls)</li>
+    <li><span class="who client">Client</span>Where leads go (their cell # / email for instant notifications)</li>
+    <li><span class="who client">Client</span>Calendar to sync (Google or Outlook) + availability, estimate duration, travel buffer</li>
+    <li><span class="who client">Client</span>Existing website? Domain owner + registrar login (or authorization to register new)</li>
+    <li><span class="who client">Client</span>Business email address for sending follow-ups</li>
+    <li><span class="who you">You</span>Kickoff confirmation sent: timeline, what's needed, what's next</li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">02</span><h2>Accounts &amp; Infrastructure</h2><span class="when">Day 1–2</span></div>
+  <p class="note">All on accounts you manage.</p>
+  <ul class="cl">
+    <li><span class="who you">You</span>Domain registered or access delegated; DNS configured</li>
+    <li><span class="who you">You</span>Hosting set up (Cloudflare / GitHub Pages)</li>
+    <li><span class="who you">You</span>Email deliverability: <strong>SPF, DKIM, DMARC</strong> records (so follow-ups don't hit spam)</li>
+    <li><span class="who you">You</span>SMS / telephony provider set up for missed-call text-back</li>
+    <li><span class="who you">You</span><span class="warn">A2P 10DLC brand + campaign registered</span> — required for US business SMS; start Day 1, approval can lag</li>
+    <li><span class="who you">You</span>STOP / opt-out handling enabled on the text-back number (compliance)</li>
+    <li><span class="who you">You</span>Automation platform connected (Make.com)</li>
+    <li><span class="who you">You</span>Booking tool (Cal.com) connected to client's calendar</li>
+    <li><span class="who you">You</span>Lead-logging destination set up + internal notification channel</li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">03</span><h2>Build &amp; Configure</h2><span class="when">Day 2–4</span></div>
+  <ul class="cl">
+    <li><span class="who you">You</span>Website built: home, services, about, contact / quote pages</li>
+    <li><span class="who you">You</span>Quote/intake form wired to webhook → lead log + notification + auto-confirmation email</li>
+    <li><span class="who you">You</span>Follow-up email sequence written &amp; scheduled</li>
+    <li><span class="who you">You</span>Missed-call text-back message written &amp; live (includes booking link)</li>
+    <li><span class="who you">You</span>Booking flow built: confirmation + reminder messages</li>
+    <li><span class="who you">You</span>Full flow mapped end to end (inquiry → response → booked → logged)</li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">04</span><h2>QA &amp; Testing</h2><span class="when">Day 4–5</span></div>
+  <ul class="cl">
+    <li><span class="who you">You</span>Submit form as a real customer — confirm log + notification + auto-email all fire</li>
+    <li><span class="who you">You</span>Place a real missed call — confirm text-back sends with correct link</li>
+    <li><span class="who you">You</span>Check auto-emails land in <strong>inbox, not spam</strong></li>
+    <li><span class="who you">You</span>Book a test appointment — confirm calendar sync + reminders</li>
+    <li><span class="who you">You</span>Confirm client receives lead notifications on phone / email</li>
+    <li><span class="who you">You</span>Mobile / responsive + page-speed check</li>
+    <li><span class="who you">You</span>Proofread all copy; verify phone, email, service area, hours</li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">05</span><h2>Client Review &amp; Approval</h2><span class="when">Day 5–6</span></div>
+  <ul class="cl">
+    <li><span class="who you">You</span>Send preview link + short Loom walkthrough</li>
+    <li><span class="who client">Client</span>Review and send feedback</li>
+    <li><span class="who you">You</span>Implement revisions</li>
+    <li><span class="who client">Client</span>Final approval / sign-off to launch</li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">06</span><h2>Launch</h2><span class="when">Day 6–7</span></div>
+  <ul class="cl">
+    <li><span class="who you">You</span>Point domain live / DNS cutover; confirm site loads on real URL</li>
+    <li><span class="who you">You</span>Confirm all automations live on the production site</li>
+    <li><span class="who you">You</span>Uptime / monitoring enabled</li>
+    <li><span class="who you">You</span>Send "You're live" summary: what they have, how leads reach them, who to contact</li>
+    <li><span class="who you">You</span>Mark CRM stage → <strong>Active / Managed</strong></li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">07</span><h2>Post-Launch &amp; Ongoing</h2><span class="when">Recurring</span></div>
+  <ul class="cl">
+    <li><span class="who you">You</span>30-day tuning check-in (the included post-launch window)</li>
+    <li><span class="who you">You</span>Confirm recurring billing ran successfully (monthly)</li>
+    <li><span class="who you">You</span>Monthly: monitor uptime, deliverability, automations; make small edits</li>
+    <li><span class="who you">You</span>Monthly / quarterly: short performance recap to client (leads captured, booked)</li>
+    <li><span class="who you">You</span>Lead-gen tasks, if applicable to that client</li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">08</span><h2>Offboarding</h2><span class="when">If they cancel</span></div>
+  <ul class="cl">
+    <li><span class="who you">You</span>Cancel recurring billing</li>
+    <li><span class="who you">You</span>Transfer domain, website, calendar, and lead data to the client ("it stays yours" promise)</li>
+    <li><span class="who you">You</span>Disable / clean up managed accounts; confirm handover complete</li>
+  </ul>
+</section>
+
+<div class="callout">
+  <div class="lbl">Don't-miss compliance items</div>
+  <p><strong>A2P 10DLC registration</strong> (Phase 02) — US carriers require registration for business texting. Skip it and missed-call text-backs can be silently blocked. Start Day 1.</p>
+  <p><strong>Email authentication (SPF / DKIM / DMARC)</strong> — without it, automated follow-ups land in spam, which kills the value prop. Non-negotiable per client.</p>
+</div>
+
+<footer>
+  <span>Alignment Automations · Internal Delivery Checklist</span>
+  <span>$1,500 setup + $297/mo · 5–7 day setup</span>
+</footer>
+
+</body>
+</html>

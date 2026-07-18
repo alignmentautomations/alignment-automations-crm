@@ -1,533 +1,993 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { PLAYBOOK_CSS, PLAYBOOK_HTML } from "./playbookContent";
 
-// ─── Pipeline ─────────────────────────────────────────────────────────────────
+// ─── Pipeline ──────────────────────────────────────────────────────────────────────────────────
+
+const PIPELINE_GROUPS = [
+  { id:"prospects", label:"Prospects",      description:"Leads & demos" },
+  { id:"clients",   label:"Active Clients", description:"Onboarding & ongoing" },
+];
 
 const PIPELINE_STAGES = [
-  { id: "lead",             label: "Lead",              color: "#94a3b8" },
-  { id: "demo_booked",      label: "Demo Booked",       color: "#f59e0b" },
-  { id: "demo_done",        label: "Demo Done",         color: "#f59e0b" },
-  { id: "yes_closed_won",   label: "Yes / Closed-Won",  color: "#10b981" },
-  { id: "onboarding_sent",  label: "Onboarding Sent",   color: "#3b82f6" },
-  { id: "build_in_progress",label: "Build In Progress", color: "#8b5cf6" },
-  { id: "testing",          label: "Testing",           color: "#f97316" },
-  { id: "live",             label: "Live",              color: "#10b981" },
-  { id: "monthly_support",  label: "Monthly Support",   color: "#06b6d4" },
-  { id: "closed_lost",      label: "Closed-Lost",       color: "#ef4444" },
+  { id:"lead",              label:"New Lead",         color:"#94a3b8", group:"prospects" },
+  { id:"demo_booked",       label:"Demo Scheduled",   color:"#f59e0b", group:"prospects" },
+  { id:"demo_done",         label:"Demo Complete",    color:"#a78bfa", group:"prospects" },
+  { id:"yes_closed_won",    label:"Won",              color:"#10b981", group:"prospects" },
+  { id:"closed_lost",       label:"Lost",             color:"#ef4444", group:"prospects" },
+  { id:"onboarding_sent",   label:"Onboarding",       color:"#3b82f6", group:"clients"   },
+  { id:"build_in_progress", label:"Building",         color:"#8b5cf6", group:"clients"   },
+  { id:"testing",           label:"Transfer & Setup", color:"#f97316", group:"clients"   },
+  { id:"live",              label:"Live",             color:"#10b981", group:"clients"   },
+  { id:"monthly_support",   label:"Monthly Support",  color:"#06b6d4", group:"clients"   },
 ];
 
 const STATUS_COLORS = {
-  lead:             { bg:"rgba(148,163,184,0.15)", text:"#94a3b8", border:"rgba(148,163,184,0.4)" },
-  demo_booked:      { bg:"rgba(245,158,11,0.15)",  text:"#f59e0b", border:"rgba(245,158,11,0.4)"  },
-  demo_done:        { bg:"rgba(245,158,11,0.15)",  text:"#f59e0b", border:"rgba(245,158,11,0.4)"  },
-  yes_closed_won:   { bg:"rgba(16,185,129,0.15)",  text:"#10b981", border:"rgba(16,185,129,0.4)"  },
-  onboarding_sent:  { bg:"rgba(234,179,8,0.15)",   text:"#eab308", border:"rgba(234,179,8,0.4)"   },
-  build_in_progress:{ bg:"rgba(139,92,246,0.15)",  text:"#8b5cf6", border:"rgba(139,92,246,0.4)"  },
-  testing:          { bg:"rgba(249,115,22,0.15)",  text:"#f97316", border:"rgba(249,115,22,0.4)"  },
-  live:             { bg:"rgba(16,185,129,0.15)",  text:"#10b981", border:"rgba(16,185,129,0.4)"  },
-  monthly_support:  { bg:"rgba(6,182,212,0.15)",   text:"#06b6d4", border:"rgba(6,182,212,0.4)"   },
-  closed_lost:      { bg:"rgba(239,68,68,0.15)",   text:"#ef4444", border:"rgba(239,68,68,0.4)"   },
+  lead:              { bg:"rgba(148,163,184,0.15)", text:"#94a3b8", border:"rgba(148,163,184,0.4)" },
+  demo_booked:       { bg:"rgba(245,158,11,0.15)",  text:"#f59e0b", border:"rgba(245,158,11,0.4)"  },
+  demo_done:         { bg:"rgba(167,139,250,0.15)", text:"#a78bfa", border:"rgba(167,139,250,0.4)" },
+  yes_closed_won:    { bg:"rgba(16,185,129,0.15)",  text:"#10b981", border:"rgba(16,185,129,0.4)"  },
+  onboarding_sent:   { bg:"rgba(59,130,246,0.15)",  text:"#3b82f6", border:"rgba(59,130,246,0.4)"  },
+  build_in_progress: { bg:"rgba(139,92,246,0.15)",  text:"#8b5cf6", border:"rgba(139,92,246,0.4)"  },
+  testing:           { bg:"rgba(249,115,22,0.15)",  text:"#f97316", border:"rgba(249,115,22,0.4)"  },
+  live:              { bg:"rgba(16,185,129,0.15)",  text:"#10b981", border:"rgba(16,185,129,0.4)"  },
+  monthly_support:   { bg:"rgba(6,182,212,0.15)",   text:"#06b6d4", border:"rgba(6,182,212,0.4)"   },
+  closed_lost:       { bg:"rgba(239,68,68,0.15)",   text:"#ef4444", border:"rgba(239,68,68,0.4)"   },
 };
 
 const STAGE_DOT = {
-  lead:"#94a3b8", demo_booked:"#f59e0b", demo_done:"#f59e0b", yes_closed_won:"#10b981",
-  onboarding_sent:"#eab308", build_in_progress:"#8b5cf6", testing:"#f97316",
+  lead:"#94a3b8", demo_booked:"#f59e0b", demo_done:"#a78bfa", yes_closed_won:"#10b981",
+  onboarding_sent:"#3b82f6", build_in_progress:"#8b5cf6", testing:"#f97316",
   live:"#10b981", monthly_support:"#06b6d4", closed_lost:"#ef4444",
 };
 
-// When a clinic moves to these stages, auto-suggest a follow-up trigger
+// Client Onboarding doc, hosted for linking from the client_won email.
+const ONBOARDING_DOC_URL = "https://app.alignmentautomations.com/client-onboarding.pdf";
+
 const STAGE_AUTO_TRIGGER = {
-  yes_closed_won:  "new_client",
-  onboarding_sent: "new_client",
-  live:            "new_client",
-  monthly_support: "no_activity",
-  closed_lost:     "no_activity",
+  yes_closed_won:  "client_won",   // auto-fires the onboarding email — no confirmation
+  onboarding_sent: "client_won",   // fallback if a business is dropped straight into Onboarding
+  closed_lost:     "no_activity",  // suggests (doesn't auto-fire) the long-tail nurture sequence
 };
 
-// ─── Checklist Modules ────────────────────────────────────────────────────────
+// ─── Checklist Modules ──────────────────────────────────────────────────────────────────
+
+const INTAKE_PACKAGE = "Done-for-You Intake System";
 
 const MODULES = {
-  A: {
+  intake_system: {
+    // (Client) — what the business owner provides / does
     clinic: [
-      { name:"Create Calendly account",                                    done:false, section:"Accounts & Access" },
-      { name:"Connect calendar to Calendly",                               done:false, section:"Accounts & Access" },
-      { name:"Set appointment availability",                               done:false, section:"Accounts & Access" },
-      { name:"Create intake form tool (Google Forms / Tally / Typeform)",  done:false, section:"Accounts & Access" },
-      { name:"Create Zapier or Make account",                              done:false, section:"Accounts & Access" },
-      { name:"Provide master contact email",                               done:false, section:"Accounts & Access" },
-      { name:"Approve intake questions",                                   done:false, section:"Approvals"         },
-      { name:"Approve confirmation message copy",                          done:false, section:"Approvals"         },
-      { name:"Give admin access to Calendly",                              done:false, section:"Accounts & Access" },
-      { name:"Give admin access to Form tool",                             done:false, section:"Accounts & Access" },
-      { name:"Give admin access to Zapier/Make",                           done:false, section:"Accounts & Access" },
+      { name:"Confirm phone number type: cell, landline, or VoIP (RingCentral, etc.)", done:false, section:"Phase 0 · Sales Qualification" },
+      { name:"Confirm you have an EIN / tax ID (or that you don't)", done:false, section:"Phase 0 · Sales Qualification" },
+      { name:"Confirm the number isn't already text-enabled with another provider", done:false, section:"Phase 0 · Sales Qualification" },
+      { name:"Attend the 30-minute kickoff call", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Make first payment — $1,797 (setup + first month)", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Sign the service agreement", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Provide legal business name, exactly as registered", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Provide EIN / tax ID (or confirm none — needed for carrier registration)", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Provide registered business address", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Provide entity type (LLC, S-corp, or sole prop)", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Provide authorized rep: first name, last name, email, job title", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Provide authorized rep's mobile number (receives the carrier OTP)", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Provide business phone number + carrier + number type", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Provide existing website URL, if any", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Provide services offered + rough price ranges", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Provide service area and business hours", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Provide photos of your work (before/afters, job sites, crew)", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Provide your logo, if you have one", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Provide reviews / testimonials for the site", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Provide calendar preferences (estimate hours, duration, notice needed)", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Provide where lead notifications should go (your cell / email)", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Provide the domain name you want (or say if you already own one)", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Respond to the carrier mobile OTP (only if sole-prop registration)", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Sign the carrier authorization form / LOA (within 7 days)", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Review the preview link and send feedback in one batch", done:false, section:"Phase 3 · Days 9–11 — Review" },
+      { name:"Give written sign-off to launch", done:false, section:"Phase 3 · Days 9–11 — Review" },
+      { name:"Set conditional call forwarding at your carrier (busy / no-answer / unreachable)", done:false, section:"Phase 5 · SMS Go-Live" },
+      { name:"Walk through the full text-back loop together on a call", done:false, section:"Phase 5 · SMS Go-Live" },
     ],
+    // (You) — Alignment Automations delivery (from the Internal Ops Manual)
     alignment: [
-      { name:"Confirm intake flow structure",                 done:false, section:"Build"            },
-      { name:"Create intake form",                            done:false, section:"Build"            },
-      { name:"Configure form validation",                     done:false, section:"Build"            },
-      { name:"Create automation trigger",                     done:false, section:"Build"            },
-      { name:"Build form to confirmation email automation",   done:false, section:"Build"            },
-      { name:"Insert booking link into confirmation message", done:false, section:"Build"            },
-      { name:"Configure internal notification email",         done:false, section:"Build"            },
-      { name:"Create lead logging sheet or CRM entry",        done:false, section:"Build"            },
-      { name:"Test form submission (desktop)",                done:false, section:"Testing & Launch" },
-      { name:"Test form submission (mobile)",                 done:false, section:"Testing & Launch" },
-      { name:"Confirm booking link works",                    done:false, section:"Testing & Launch" },
-      { name:"Confirm calendar receives appointment",         done:false, section:"Testing & Launch" },
-      { name:"Confirm notification email is received",        done:false, section:"Testing & Launch" },
-      { name:"Mark system Ready for Launch",                  done:false, section:"Testing & Launch" },
-      { name:"Send clinic walkthrough",                       done:false, section:"Testing & Launch" },
-    ],
-  },
-  B: {
-    clinic: [
-      { name:"Create Twilio account",                       done:false, section:"Accounts & Access" },
-      { name:"Purchase phone number",                       done:false, section:"Accounts & Access" },
-      { name:"Register business profile (A2P if required)", done:false, section:"Accounts & Access" },
-      { name:"Add Alignment Automations as admin",          done:false, section:"Accounts & Access" },
-      { name:"Provide clinic booking link",                 done:false, section:"Accounts & Access" },
-      { name:"Confirm call handling preference",            done:false, section:"Approvals"         },
-    ],
-    alignment: [
-      { name:"Connect Twilio number",           done:false, section:"Build"            },
-      { name:"Configure missed call detection", done:false, section:"Build"            },
-      { name:"Create SMS response template",    done:false, section:"Build"            },
-      { name:"Insert booking link in response", done:false, section:"Build"            },
-      { name:"Configure response delay",        done:false, section:"Build"            },
-      { name:"Configure spam filtering",        done:false, section:"Build"            },
-      { name:"Create logging for phone leads",  done:false, section:"Build"            },
-      { name:"Test missed call trigger",        done:false, section:"Testing & Launch" },
-      { name:"Test SMS delivery",               done:false, section:"Testing & Launch" },
-      { name:"Test booking link from text",     done:false, section:"Testing & Launch" },
-      { name:"Confirm notification workflow",   done:false, section:"Testing & Launch" },
-      { name:"Mark system Ready",               done:false, section:"Testing & Launch" },
-    ],
-  },
-  C: {
-    clinic: [
-      { name:"Provide business name",                           done:false, section:"Accounts & Access" },
-      { name:"Provide logo",                                    done:false, section:"Accounts & Access" },
-      { name:"Provide services list",                           done:false, section:"Accounts & Access" },
-      { name:"Provide service descriptions (or approve draft)", done:false, section:"Accounts & Access" },
-      { name:"Provide contact information",                     done:false, section:"Accounts & Access" },
-      { name:"Provide address",                                 done:false, section:"Accounts & Access" },
-      { name:"Provide booking link",                            done:false, section:"Accounts & Access" },
-      { name:"Approve website copy",                            done:false, section:"Approvals"         },
-      { name:"Approve page structure",                          done:false, section:"Approvals"         },
-    ],
-    alignment: [
-      { name:"Create website project",                done:false, section:"Build"            },
-      { name:"Build homepage layout",                 done:false, section:"Build"            },
-      { name:"Build services page",                   done:false, section:"Build"            },
-      { name:"Build booking page",                    done:false, section:"Build"            },
-      { name:"Build contact page",                    done:false, section:"Build"            },
-      { name:"Insert booking call-to-action buttons", done:false, section:"Build"            },
-      { name:"Optimize for mobile",                   done:false, section:"Build"            },
-      { name:"Configure domain",                      done:false, section:"Build"            },
-      { name:"Connect hosting",                       done:false, section:"Build"            },
-      { name:"Test booking links",                    done:false, section:"Testing & Launch" },
-      { name:"Test mobile layout",                    done:false, section:"Testing & Launch" },
-      { name:"Publish website",                       done:false, section:"Testing & Launch" },
-      { name:"Send review link",                      done:false, section:"Testing & Launch" },
-      { name:"Mark Website Live",                     done:false, section:"Testing & Launch" },
-    ],
-  },
-  D: {
-    clinic: [
-      { name:"Create Twilio account",                   done:false, section:"Accounts & Access" },
-      { name:"Purchase phone number",                   done:false, section:"Accounts & Access" },
-      { name:"Provide booking link",                    done:false, section:"Accounts & Access" },
-      { name:"Give Alignment Automations admin access", done:false, section:"Accounts & Access" },
-    ],
-    alignment: [
-      { name:"Connect Twilio number",           done:false, section:"Build"            },
-      { name:"Configure missed-call trigger",   done:false, section:"Build"            },
-      { name:"Create SMS auto-response",        done:false, section:"Build"            },
-      { name:"Insert booking link",             done:false, section:"Build"            },
-      { name:"Configure quiet hours if needed", done:false, section:"Build"            },
-      { name:"Test missed call",                done:false, section:"Testing & Launch" },
-      { name:"Test SMS delivery",               done:false, section:"Testing & Launch" },
-      { name:"Confirm booking link works",      done:false, section:"Testing & Launch" },
-      { name:"Mark Call Protection Active",     done:false, section:"Testing & Launch" },
+      { name:"Run phone-number triage — confirm what you can promise", done:false, section:"Phase 0 · Sales Qualification" },
+      { name:"Check disqualifiers (already SMS-enabled, outside US/CA, on another Twilio voice account)", done:false, section:"Phase 0 · Sales Qualification" },
+      { name:"Confirm EIN path: Standard/Low-Volume (has EIN) vs Sole Prop (none)", done:false, section:"Phase 0 · Sales Qualification" },
+      { name:"Run the 30-min kickoff call; collect the full A2P data set + brand assets", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Collect first payment: $1,797 (setup + first month)", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Register the domain — registrant = client's name/business", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Deploy a real homepage to the domain immediately (so the A2P URL check passes)", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Confirm the Twilio account is paid, not trial", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Create a Trust Hub customer profile using the client's details", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Submit A2P Brand (Standard/Low-Volume if EIN; Sole Prop only if none)", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Submit A2P Campaign — use case Customer Care; keep default STOP/HELP replies", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"If landline/VoIP: submit the Hosted SMS order and send the LOA for signature", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Create the lead-log Sheet in the client's Google Drive; add yourself as Editor", done:false, section:"Phase 1 · Day 1 — Kickoff & Compliance" },
+      { name:"Build the full site in the GitHub repo; deploy to Cloudflare Pages", done:false, section:"Phase 2 · Days 2–8 — Build" },
+      { name:"Write conversion copy; build pages, forms, and CTAs", done:false, section:"Phase 2 · Days 2–8 — Build" },
+      { name:"Deploy the per-client missed-call text-back Worker + D1 binding", done:false, section:"Phase 2 · Days 2–8 — Build" },
+      { name:"Configure Cal.com event types; connect the client's calendar", done:false, section:"Phase 2 · Days 2–8 — Build" },
+      { name:"Build Make.com scenarios: form → confirmation → booking → Sheet → notify", done:false, section:"Phase 2 · Days 2–8 — Build" },
+      { name:"Write the follow-up email sequence", done:false, section:"Phase 2 · Days 2–8 — Build" },
+      { name:"Monitor A2P campaign + Hosted SMS status daily; respond fast to info requests", done:false, section:"Phase 2 · Days 2–8 — Build" },
+      { name:"Full end-to-end test on staging before the client sees anything", done:false, section:"Phase 2 · Days 2–8 — Build" },
+      { name:"Send the preview link; collect feedback in one batch", done:false, section:"Phase 3 · Days 9–11 — Review" },
+      { name:"Apply revisions (cap at two rounds; flag scope creep past that)", done:false, section:"Phase 3 · Days 9–11 — Review" },
+      { name:"Get written sign-off before launch", done:false, section:"Phase 3 · Days 9–11 — Review" },
+      { name:"Point domain nameservers to Cloudflare; add custom domain to Pages", done:false, section:"Phase 4 · Day 12 — Website Launch" },
+      { name:"Submit a live test lead — verify the confirmation email fires", done:false, section:"Phase 4 · Day 12 — Website Launch" },
+      { name:"Verify the booking lands on the calendar and the lead hits the Sheet", done:false, section:"Phase 4 · Day 12 — Website Launch" },
+      { name:"Verify the internal notification reaches the client", done:false, section:"Phase 4 · Day 12 — Website Launch" },
+      { name:"Confirm recurring $297/mo billing is active", done:false, section:"Phase 4 · Day 12 — Website Launch" },
+      { name:"Confirm A2P campaign status is VERIFIED", done:false, section:"Phase 5 · SMS Go-Live" },
+      { name:"Attach the campaign to the Messaging Service; register the phone number to it", done:false, section:"Phase 5 · SMS Go-Live" },
+      { name:"Confirm Hosted SMS status is in-use (landline/VoIP path)", done:false, section:"Phase 5 · SMS Go-Live" },
+      { name:"Caller-ID passthrough test: place a real missed call from an outside phone", done:false, section:"Phase 5 · SMS Go-Live" },
+      { name:"Confirm text-back lands within 60s, from the correct sender number", done:false, section:"Phase 5 · SMS Go-Live" },
+      { name:"Test STOP — confirm opt-out works and is honored", done:false, section:"Phase 5 · SMS Go-Live" },
+      { name:"Test HELP — confirm the reply names the business", done:false, section:"Phase 5 · SMS Go-Live" },
+      { name:"Send handoff summary: domain login, Sheet link, your contact", done:false, section:"Phase 5 · SMS Go-Live" },
+      { name:"Daily: check Make.com for failed scenario runs; investigate errors", done:false, section:"Phase 6 · Ongoing Operations" },
+      { name:"Weekly: confirm the MCTT Worker responds; scan Twilio logs for delivery/30007 errors", done:false, section:"Phase 6 · Ongoing Operations" },
+      { name:"Monthly: verify lead volume vs prior month (catches silent form breakage)", done:false, section:"Phase 6 · Ongoing Operations" },
+      { name:"Monthly: reconcile tool spend (incl. A2P fees) against the $297", done:false, section:"Phase 6 · Ongoing Operations" },
+      { name:"Monthly: confirm the opt-out list is being honored", done:false, section:"Phase 6 · Ongoing Operations" },
+      { name:"Quarterly: check domain renewal dates", done:false, section:"Phase 6 · Ongoing Operations" },
+      { name:"Quarterly: confirm the A2P campaign is still VERIFIED", done:false, section:"Phase 6 · Ongoing Operations" },
+      { name:"Transfer the domain — issue the EPP/auth code and confirm the transfer", done:false, section:"Phase 7 · Offboarding (if they cancel)" },
+      { name:"Hand over the lead log; remove yourself as Editor once confirmed", done:false, section:"Phase 7 · Offboarding (if they cancel)" },
+      { name:"Export the site — deliver static files, copy, and photos", done:false, section:"Phase 7 · Offboarding (if they cancel)" },
+      { name:"Release the phone number (revoke Hosted SMS auth, or port the Twilio number out)", done:false, section:"Phase 7 · Offboarding (if they cancel)" },
+      { name:"Remove call forwarding at their carrier", done:false, section:"Phase 7 · Offboarding (if they cancel)" },
+      { name:"Deregister the A2P campaign to stop recurring fees", done:false, section:"Phase 7 · Offboarding (if they cancel)" },
+      { name:"Decommission the Worker, D1, and Make scenarios after they confirm receipt", done:false, section:"Phase 7 · Offboarding (if they cancel)" },
+      { name:"Cancel billing the same day", done:false, section:"Phase 7 · Offboarding (if they cancel)" },
     ],
   },
 };
 
 const PACKAGE_MODULES = {
-  "Automation Core":           ["A"],
-  "Intake Foundation":         ["A","C"],
-  "Call Protection":           ["D"],
-  "Call Capture":              ["B"],
-  "Core + Call Protection":    ["A","D"],
-  "Foundation + Core":         ["A","C"],
-  "Full Intake Infrastructure":["A","B","C"],
+  [INTAKE_PACKAGE]: ["intake_system"],
 };
 
 function getPackageTasks(pkg) {
-  const keys = PACKAGE_MODULES[pkg] || [];
+  const keys = PACKAGE_MODULES[pkg] || ["intake_system"];
   const al = [], cl = [];
   keys.forEach(k => { if (MODULES[k]) { al.push(...MODULES[k].alignment); cl.push(...MODULES[k].clinic); } });
   return { alignment: al, clinic: cl };
 }
 
-const DEFAULT_TASKS = {
-  alignment: [
-    { name:"Define project scope", done:false, section:"Planning" },
-    { name:"Gather requirements",  done:false, section:"Planning" },
-    { name:"Build solution",       done:false, section:"Build"    },
-    { name:"Test & QA",            done:false, section:"QA"       },
-    { name:"Deploy",               done:false, section:"Launch"   },
-  ],
-  clinic: [
-    { name:"Provide access",   done:false, section:"Setup"     },
-    { name:"Review & approve", done:false, section:"Approvals" },
-    { name:"Go live",          done:false, section:"Launch"    },
-  ],
+const PACKAGES = [INTAKE_PACKAGE];
+
+// Accounts / access the client must own, per the onboarding checklist.
+const PACKAGE_ACCOUNTS = {
+  [INTAKE_PACKAGE]: ["EIN / tax ID", "Registered business address", "Authorized rep mobile (OTP)", "Business phone + carrier type"],
 };
 
-const PACKAGES = {
-  individual: ["Automation Core","Intake Foundation","Call Protection","Call Capture"],
-  bundles:    ["Core + Call Protection","Foundation + Core","Full Intake Infrastructure"],
-};
+// ─── Prospecting (from the outreach playbook) ───────────────────────────────────
 
-// ─── Follow-up ────────────────────────────────────────────────────────────────
+// Ideal-prospect trades from the playbook, in fit order.
+const INDUSTRIES = ["Painting", "HVAC", "Roofing", "Plumbing", "Electrical", "Landscaping / Lawn", "Other"];
+
+// Where the lead was found (playbook prospecting sources).
+const LEAD_SOURCES = ["Google Maps", "Google Business Profile", "Facebook / Groups", "Facebook Ad Library", "Referral", "Website form", "Other"];
+
+// Prospect temperature — maps to the lead scorecard verdict (8+ / 5-7 / <5).
+const PRIORITIES = [
+  { id:"hot",  label:"Hot",  hint:"Record today",  color:"#ef4444" },
+  { id:"warm", label:"Warm", hint:"Warm list",     color:"#f59e0b" },
+  { id:"cold", label:"Cold", hint:"Park it",       color:"#64748b" },
+];
+const getPriority = id => PRIORITIES.find(p => p.id === id);
+
+// Places-query-friendly trade values for the Prospecting page's search form —
+// distinct from INDUSTRIES (the CRM's display labels, which include "Other"
+// with no Places query equivalent). Matches INDUSTRY_MAP in
+// functions/api/_lib/prospecting.js.
+const PROSPECT_TRADES = [
+  { value: "painter", label: "Painter" },
+  { value: "hvac contractor", label: "HVAC contractor" },
+  { value: "roofer", label: "Roofer" },
+  { value: "plumber", label: "Plumber" },
+  { value: "electrician", label: "Electrician" },
+  { value: "landscaper", label: "Landscaper / lawn care" },
+];
+
+function tierColor(tier) {
+  if (tier === "Record today") return "#ef4444";
+  if (tier === "Warm") return "#f59e0b";
+  return "#64748b";
+}
+
+// ─── Follow-up ─────────────────────────────────────────────────────────────────────────────
 
 const TRIGGER_TYPES = [
-  { id:"new_client",       label:"New Client Onboarded", icon:"\u2726", color:"#4ade80" },
-  { id:"package_purchase", label:"Package Purchase",     icon:"\u25c8", color:"#60a5fa" },
-  { id:"no_activity",      label:"No Activity",          icon:"\u25cc", color:"#f59e0b" },
-  { id:"missed_call",      label:"Missed Call",          icon:"\u27f3", color:"#f87171" },
-  { id:"form_inquiry",     label:"Form Inquiry",         icon:"\u25fb", color:"#a78bfa" },
-  { id:"manual",           label:"Manual Trigger",       icon:"\u25c6", color:"#64748b" },
+  { id:"website_inquiry",   label:"Website Inquiry",        icon:"◻", color:"#a78bfa" },
+  { id:"prospect_outreach", label:"Prospect Follow-up",     icon:"\u{1F3A5}", color:"#818cf8" },
+  { id:"client_won",        label:"Deal Won / Onboarding",  icon:"✦", color:"#4ade80" },
+  { id:"no_activity",       label:"Gone Quiet",             icon:"◌", color:"#f59e0b" },
+  { id:"manual",            label:"Manual Trigger",         icon:"◆", color:"#64748b" },
 ];
 
 const DEFAULT_SEQUENCES = [
-  { id:"seq_1", name:"New Client Welcome", trigger:"new_client", active:true, steps:[
-    { id:"s1", delay:0,  delayUnit:"hours",   channel:"email",
-      subject:"Welcome to {{clinic_name}} \u2014 You\'re all set",
-      body:"Hi {{first_name}},\n\nWelcome aboard! Your intake system is live.\n\n\u2192 Booking link active\n\u2192 Leads captured automatically\n\u2192 Weekly summary incoming\n\nAny questions? Reply anytime.\n\n\u2014 Alignment Automations" },
-    { id:"s2", delay:2,  delayUnit:"days",    channel:"sms",   subject:"",
-      body:"Hey {{first_name}}, your system has been live 2 days \u2014 seeing new inquiries? Let us know if you need anything. \u2014 Alignment Automations" },
-    { id:"s3", delay:7,  delayUnit:"days",    channel:"email",
-      subject:"Your first week \u2014 how\'s it going?",
-      body:"Hi {{first_name}},\n\nOne week in \u2014 intake, confirmations, and call capture should all be running. If anything feels off, let\'s jump on a call.\n\n\u2014 Alignment Automations" },
+  // Auto-fires when someone submits the contact form on your marketing site
+  // (see contact.html — it posts straight to /api/webhook/form-inquiry).
+  { id:"seq_0", name:"Website Inquiry Follow-up", trigger:"website_inquiry", active:true, steps:[
+    { id:"s0a", delay:0, delayUnit:"minutes", channel:"email",
+      subject:"Got your message — here's what's next",
+      body:"Hi {{first_name}},\n\nThanks for reaching out to Alignment Automations! We received your inquiry and will be in touch shortly.\n\nIn the meantime, feel free to book a discovery call:\nhttps://calendly.com/alignment-automations/new-meeting\n\n— Matthew\nAlignment Automations" },
+    { id:"s0b", delay:1, delayUnit:"days", channel:"email",
+      subject:"Quick follow-up",
+      body:"Hi {{first_name}},\n\nJust following up on your inquiry. Happy to answer any questions you have about how we can help {{business_name}}.\n\nBook a free 15-minute call:\nhttps://calendly.com/alignment-automations/new-meeting\n\n— Matthew\nAlignment Automations" },
+    { id:"s0c", delay:4, delayUnit:"days", channel:"email",
+      subject:"Still interested?",
+      body:"Hi {{first_name}},\n\nOne last check-in. If timing isn't right or you have questions, just reply — happy to help.\n\nhttps://calendly.com/alignment-automations/new-meeting\n\n— Matthew\nAlignment Automations" },
   ]},
-  { id:"seq_2", name:"Missed Call Recovery", trigger:"missed_call", active:true, steps:[
-    { id:"s4", delay:5,  delayUnit:"minutes", channel:"sms",   subject:"",
-      body:"Hi {{first_name}}, sorry we missed your call! Book a time: https://calendly.com/alignment-automations/new-meeting" },
-    { id:"s5", delay:1,  delayUnit:"days",    channel:"email",
-      subject:"We missed you \u2014 let\'s connect",
-      body:"Hi {{first_name}},\n\nWe missed your call. Grab 15 minutes:\nhttps://calendly.com/alignment-automations/new-meeting\n\n\u2014 Alignment Automations" },
+  // Launch manually after you send the first personalized outreach video (Day 0).
+  // Cadence matches the playbook's 30-day follow-up exactly: day 3, 7, 14, 21, 30.
+  { id:"seq_1", name:"Prospect Follow-up (Day 3–30)", trigger:"prospect_outreach", active:true, steps:[
+    { id:"s1", delay:3, delayUnit:"days", channel:"email",
+      subject:"Quick follow-up",
+      body:"Hi {{first_name}},\n\nJust making sure my note about {{business_name}} came through — no worries if now's not the time.\n\nIf it's useful, happy to grab 15 minutes:\nhttps://calendly.com/alignment-automations/new-meeting\n\n— Matthew\nAlignment Automations" },
+    { id:"s2", delay:4, delayUnit:"days", channel:"email",
+      subject:"A quick example",
+      body:"Hi {{first_name}},\n\nCurious what you thought of the video. Here's a quick example of this working for a business just like {{business_name}} — happy to walk through it live if that's easier:\nhttps://calendly.com/alignment-automations/new-meeting\n\n— Matthew\nAlignment Automations" },
+    { id:"s3", delay:7, delayUnit:"days", channel:"email",
+      subject:"A different angle",
+      body:"Hi {{first_name}},\n\nDifferent thought on {{business_name}} — I think the bigger win might actually be somewhere else. Worth a quick look?\nhttps://calendly.com/alignment-automations/new-meeting\n\n— Matthew\nAlignment Automations" },
+    { id:"s4", delay:7, delayUnit:"days", channel:"email",
+      subject:"How this looked for one HVAC shop",
+      body:"Hi {{first_name}},\n\nA two-tech HVAC shop I worked with was missing a dozen calls a week with no way to capture them. Six weeks after launch they were booking 8–10 extra jobs a month from leads that used to vanish.\n\n\"I had no idea how many calls I was losing until they stopped getting lost.\"\n\nIf {{business_name}} has a similar gap, happy to show you where:\nhttps://calendly.com/alignment-automations/new-meeting\n\n— Matthew\nAlignment Automations" },
+    { id:"s5", delay:9, delayUnit:"days", channel:"email",
+      subject:"Last note from me",
+      body:"Hi {{first_name}},\n\nI'll stop reaching out after this one — but if catching more leads for {{business_name}} is ever on your list, I'm one message away.\n\n— Matthew\nAlignment Automations" },
   ]},
-  { id:"seq_3", name:"Form Inquiry Follow-up", trigger:"form_inquiry", active:true, steps:[
-    { id:"s6", delay:10, delayUnit:"minutes", channel:"email",
-      subject:"Got your message \u2014 here\'s what\'s next",
-      body:"Hi {{first_name}},\n\nThanks for reaching out! Book a discovery call:\nhttps://calendly.com/alignment-automations/new-meeting\n\n\u2014 Alignment Automations" },
-    { id:"s7", delay:30, delayUnit:"minutes", channel:"sms",   subject:"",
-      body:"Hey {{first_name}}! Got your inquiry. Book here: https://calendly.com/alignment-automations/new-meeting" },
+  // Auto-fires the moment a deal is marked Won or moved to Onboarding.
+  { id:"seq_2", name:"Client Onboarding Kickoff", trigger:"client_won", active:true, steps:[
+    { id:"s6", delay:0, delayUnit:"minutes", channel:"email",
+      subject:"Welcome aboard — here's what happens next",
+      body:"Hi {{first_name}},\n\nWelcome to Alignment Automations! Here's exactly what happens from here:\n\n1. Kickoff call (30 min) — we'll cover your services, service area, and the handful of details the phone carriers need before your system can send texts.\n2. Days 2–8 — I build everything: your website, booking calendar, missed-call text-back, and follow-up emails. Nothing needed from you.\n3. Days 9–11 — you review a preview link and tell me what to change.\n4. Day 12 — your website goes live.\n5. Within about a week of launch — missed-call text-back switches on once the carriers approve registration.\n\nYour full onboarding guide, with everything to have ready for the kickoff call:\n" + ONBOARDING_DOC_URL + "\n\nBook the kickoff call here:\nhttps://calendly.com/alignment-automations/new-meeting\n\n— Matthew\nAlignment Automations" },
   ]},
-  { id:"seq_4", name:"Re-engagement", trigger:"no_activity", active:false, steps:[
-    { id:"s8", delay:30, delayUnit:"days",    channel:"email",
+  // Long-tail nurture for prospects who go quiet after a demo, or lost deals worth revisiting later.
+  { id:"seq_3", name:"Gone Quiet — Long-term Nurture", trigger:"no_activity", active:false, steps:[
+    { id:"s7", delay:30, delayUnit:"days",   channel:"email",
       subject:"Still here if you need us",
-      body:"Hi {{first_name}},\n\nJust checking in on {{clinic_name}} \u2014 if you have questions or want to explore new automations, we\'re available.\n\n\u2014 Alignment Automations" },
-    { id:"s9", delay:45, delayUnit:"days",    channel:"sms",   subject:"",
-      body:"Hey {{first_name}}, it\'s been a while! Want to revisit your setup? We\'re here. \u2014 Alignment Automations" },
+      body:"Hi {{first_name}},\n\nJust checking in on {{business_name}} — if you have questions or want to explore what's possible, I'm available for a quick call.\n\nhttps://calendly.com/alignment-automations/new-meeting\n\n— Matthew\nAlignment Automations" },
+    { id:"s8", delay:45, delayUnit:"days",   channel:"email",
+      subject:"One last check-in",
+      body:"Hi {{first_name}},\n\nThis will be my last follow-up for now. If timing is ever right to revisit things for {{business_name}}, I'd love to reconnect.\n\n— Matthew\nAlignment Automations" },
   ]},
 ];
 
-// ─── DB (Cloudflare D1 via Pages Functions) ───────────────────────────────────
+// ─── App config ──────────────────────────────────────────────────────────────
 
-const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || "8n4kvkar";
 const API_BASE = "/api";
+
+// The shared secret is the password the user types at login. It is stored only
+// in this browser and sent as a header on every API call — it never ships in the
+// bundle. The server (functions/api/_middleware.js) validates it against APP_SECRET.
+function getSecret() { return localStorage.getItem("aa_secret") || ""; }
+
+async function apiFetch(path, opts = {}) {
+  return fetch(`${API_BASE}${path}`, {
+    ...opts,
+    headers: { "x-app-secret": getSecret(), ...(opts.headers || {}) },
+  });
+}
+
+// Validate a password by asking the server. The secret is never in the bundle,
+// so wrong passwords are rejected server-side with 401.
+async function validatePassword(pw) {
+  try {
+    const res = await fetch(`${API_BASE}/clinics`, { headers: { "x-app-secret": pw } });
+    if (res.status === 401) return false;
+    if (res.ok) return true;
+  } catch (_) { /* network error — fall through */ }
+  // Dev fallback (stripped from production builds): allow login when running `vite dev`,
+  // where Cloudflare Functions don't execute.
+  return import.meta.env.DEV;
+}
 
 const db = {
   async getAll() {
-    const r = await fetch(`${API_BASE}/clinics`);
-    if (!r.ok) throw new Error(await r.text());
-    return r.json();
+    const res = await apiFetch(`/clinics`);
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
   },
-  async create(c) {
-    const r = await fetch(`${API_BASE}/clinics`, {
-      method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(c),
+  async create(clinic) {
+    const res = await apiFetch(`/clinics`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(clinic),
     });
-    if (!r.ok) throw new Error(await r.text());
-    return r.json();
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
   },
-  async update(id, p) {
-    const r = await fetch(`${API_BASE}/clinics/${id}`, {
-      method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify(p),
+  async update(id, patch) {
+    const res = await apiFetch(`/clinics/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
     });
-    if (!r.ok) throw new Error(await r.text());
-    return r.json();
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
   },
   async delete(id) {
-    const r = await fetch(`${API_BASE}/clinics/${id}`, { method:"DELETE" });
-    if (!r.ok) throw new Error(await r.text());
-    return { success:true };
+    const res = await apiFetch(`/clinics/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(await res.text());
+    return { success: true };
+  },
+};
+
+const prospectsDb = {
+  async getAll() {
+    const res = await apiFetch(`/prospects`);
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
+  },
+  async search(trade, location) {
+    const res = await apiFetch(`/prospects/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trade, location }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Search failed");
+    return data;
+  },
+  async update(id, patch) {
+    const res = await apiFetch(`/prospects/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
+  },
+  async delete(id) {
+    const res = await apiFetch(`/prospects/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(await res.text());
+    return { success: true };
+  },
+  async pushToPipeline(id) {
+    const res = await apiFetch(`/prospects/${id}/push`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok && res.status !== 409) throw new Error(data.error || "Push failed");
+    return data;
+  },
+  async exportCsv() {
+    const res = await apiFetch(`/prospects/export.csv`);
+    if (!res.ok) throw new Error("Export failed");
+    return await res.blob();
   },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function uid() { return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+function uid() {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
 
 function formatDate(iso) {
-  if (!iso) return "\u2014";
-  return new Date(iso).toLocaleDateString("en-US",{ month:"short", day:"numeric", year:"numeric" });
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function stageLabel(id) {
+  return PIPELINE_STAGES.find(s => s.id === id)?.label ?? id;
+}
+
+function getTrigger(id) {
+  return TRIGGER_TYPES.find(t => t.id === id) ?? { id: id ?? "manual", label: id ?? "Manual", icon: "◆", color: "#64748b" };
+}
+
+// Label for a sequence step's timing, e.g. "Immediately" only if it truly has no delay.
+function stepDelayLabel(step, idx, short = false) {
+  if (idx === 0 && !step.delay) return short ? "Now" : "Immediately";
+  return short ? `+${step.delay}${step.delayUnit[0]}` : `+${step.delay} ${step.delayUnit}`;
 }
 
 function timeAgo(ts) {
-  const d = Date.now() - ts, m = Math.floor(d/60000);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m/60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h/24)}d ago`;
+  if (!ts) return "";
+  const diff = Date.now() - ts;
+  if (diff < 60000) return "just now";
+  if (diff < 3600000) return Math.round(diff / 60000) + "m ago";
+  if (diff < 86400000) return Math.round(diff / 3600000) + "h ago";
+  return Math.round(diff / 86400000) + "d ago";
 }
 
-function stageLabel(id) { return PIPELINE_STAGES.find(s => s.id === id)?.label ?? id; }
-function getTrigger(id)  { return TRIGGER_TYPES.find(t => t.id === id) || TRIGGER_TYPES[5]; }
-
-function renderBody(body, clinic) {
-  return body
-    .replace(/{{first_name}}/g,  clinic.contact_name?.split(" ")[0] || "there")
-    .replace(/{{clinic_name}}/g, clinic.name || "your clinic");
+function renderBody(text, clinic) {
+  if (!text) return "";
+  const first = clinic?.contact_name?.split(" ")[0] || "there";
+  const last  = clinic?.contact_name?.split(" ").slice(1).join(" ") || "";
+  return text
+    .replace(/{{first_name}}/g, first)
+    .replace(/{{last_name}}/g, last)
+    .replace(/{{clinic_name}}/g, clinic?.name || "")
+    .replace(/{{business_name}}/g, clinic?.name || "")
+    .replace(/{{email}}/g, clinic?.contact_email || "")
+    .replace(/{{phone}}/g, clinic?.contact_phone || "");
 }
 
+// Mirrors the branded HTML shell the backend wraps every sent email in
+// (functions/api/clinics/[id].js, cron-worker, webhook/form-inquiry.js),
+// so the preview modal shows exactly what the recipient will see.
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function textToHtml(text) {
+  let out = escapeHtml(text || "");
+  out = out.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" style="color:#0066CC;text-decoration:underline;">$1</a>');
+  return out.replace(/\n/g, "<br>");
+}
+function wrapEmailHtml(bodyText) {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
+  </head>
+  <body style="margin:0;padding:0;background:#F4F7FB;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F7FB;padding:32px 16px;">
+      <tr><td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#FFFFFF;border:1px solid #E2E9F1;border-radius:14px;overflow:hidden;">
+          <tr><td style="padding:22px 28px;border-bottom:1px solid #E2E9F1;">
+            <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+              <td style="width:56px;height:56px;background-image:url('https://app.alignmentautomations.com/logo-email.png?v=6');background-size:52px 52px;background-repeat:no-repeat;background-position:center;text-align:center;"></td>
+              <td style="padding-left:12px;font-family:Arial,sans-serif;font-size:16px;">
+                <span style="font-weight:700;color:#1A1A1A;">Alignment</span><span style="font-weight:400;color:#0066CC;"> Automations</span>
+              </td>
+            </tr></table>
+          </td></tr>
+          <tr><td style="padding:28px;font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#242A2E;">
+            ${textToHtml(bodyText)}
+          </td></tr>
+          <tr><td style="padding:16px 28px;border-top:1px solid #E2E9F1;font-family:Arial,sans-serif;font-size:12px;color:#8A929C;">
+            Alignment Automations &middot; alignment.automations@gmail.com
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`;
+}
 
-// ─── CSS ──────────────────────────────────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+
+
+// ─── Styles ─────────────────────────────────────────────────────────────────────────────────
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Manrope', sans-serif; background: #0B1121; color: #f8fafc; -webkit-font-smoothing: antialiased; }
+
+  body {
+    font-family: 'Manrope', sans-serif;
+    background: #0B1121;
+    color: #f8fafc;
+    -webkit-font-smoothing: antialiased;
+  }
+
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
 
+  /* ── Layout ── */
   .app { display: flex; height: 100vh; overflow: hidden; }
 
-  .sidebar { width: 240px; min-width: 240px; background: #161f32; border-right: 1px solid rgba(255,255,255,0.07); display: flex; flex-direction: column; overflow: hidden; }
-  .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 20px 18px 16px; border-bottom: 1px solid rgba(255,255,255,0.07); }
-  .brand-name { font-size: 13px; font-weight: 700; color: #f8fafc; line-height: 1.3; }
-  .sidebar-nav { padding: 12px 10px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
-  .nav-section-label { padding: 16px 10px 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #334155; }
-  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 7px; cursor: pointer; font-size: 13px; font-weight: 500; color: #64748b; transition: all 0.15s; border: none; background: none; width: 100%; text-align: left; position: relative; font-family: 'Manrope', sans-serif; }
+  /* ── Sidebar (desktop) ── */
+  .sidebar {
+    width: 240px; min-width: 240px;
+    background: #161f32;
+    border-right: 1px solid rgba(255,255,255,0.07);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .sidebar-brand {
+    display: flex; align-items: center; gap: 10px;
+    padding: 20px 18px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  .brand-icon { width: 32px; height: 32px; flex-shrink: 0; }
+  .brand-icon img { width: 100%; height: 100%; object-fit: contain; }
+  .brand-text { line-height: 1.2; }
+  .brand-name { font-size: 13px; font-weight: 700; color: #f8fafc; }
+  .sidebar-nav { padding: 12px 10px; flex: 1; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px; border-radius: 7px; cursor: pointer;
+    font-size: 13px; font-weight: 500; color: #64748b;
+    transition: all 0.15s; border: none; background: none; width: 100%; text-align: left;
+    position: relative; font-family: 'Manrope', sans-serif;
+  }
   .nav-item:hover { color: #94a3b8; background: rgba(255,255,255,0.04); }
   .nav-item.active { color: #f8fafc; background: rgba(37,99,235,0.12); }
-  .nav-item.active::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 3px; height: 60%; background: #2563eb; border-radius: 0 2px 2px 0; }
-  .nav-icon { opacity: 0.8; display: flex; flex-shrink: 0; }
-  .nav-badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; background: #2563eb; color: white; border-radius: 9px; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
-  .logout-btn { display: flex; align-items: center; gap: 7px; width: 100%; padding: 9px 10px; margin-top: auto; border: none; background: none; color: #475569; font-size: 12px; font-weight: 500; font-family: 'Manrope', sans-serif; cursor: pointer; border-radius: 7px; transition: all 0.15s; }
-  .logout-btn:hover { color: #ef4444; background: rgba(239,68,68,0.08); }
+  .nav-item.active::before {
+    content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 60%; background: #2563eb; border-radius: 0 2px 2px 0;
+  }
+  .nav-icon { opacity: 0.8; display: flex; }
 
-  .bottom-nav { display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 60; background: #161f32; border-top: 1px solid rgba(255,255,255,0.07); padding: 8px 0 max(8px, env(safe-area-inset-bottom)); }
+  /* ── Bottom nav (mobile) ── */
+  .bottom-nav {
+    display: none;
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 60;
+    background: #161f32; border-top: 1px solid rgba(255,255,255,0.07);
+    padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+  }
   .bottom-nav-inner { display: flex; justify-content: space-around; }
-  .bottom-nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 12px; border: none; background: none; cursor: pointer; color: #475569; font-size: 10px; font-weight: 600; font-family: 'Manrope', sans-serif; letter-spacing: 0.04em; text-transform: uppercase; transition: color 0.15s; }
+  .bottom-nav-item {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 6px 24px; border: none; background: none; cursor: pointer;
+    color: #475569; font-size: 10px; font-weight: 600; font-family: 'Manrope', sans-serif;
+    letter-spacing: 0.04em; text-transform: uppercase; transition: color 0.15s;
+  }
   .bottom-nav-item.active { color: #3b82f6; }
+  .bottom-nav-item svg { opacity: 0.9; }
 
+  /* ── Main ── */
   .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-  .main-header { padding: 22px 28px 0; display: flex; align-items: flex-start; justify-content: space-between; flex-shrink: 0; gap: 12px; flex-wrap: wrap; }
-  .page-title { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: #f8fafc; }
+  .main-header {
+    padding: 22px 28px 0;
+    display: flex; align-items: flex-start; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .page-title { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; color: #f8fafc; }
   .page-subtitle { font-size: 12px; color: #475569; margin-top: 2px; font-weight: 500; }
   .main-content { flex: 1; overflow-y: auto; min-height: 0; padding: 20px 28px 28px; }
 
-  .toolbar { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
-  .search-wrap { position: relative; flex: 1; min-width: 160px; }
+  /* ── Toolbar ── */
+  .toolbar { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; }
+  .search-wrap { position: relative; flex: 1; min-width: 0; }
   .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #475569; pointer-events: none; }
-  .search-input { width: 100%; padding: 9px 12px 9px 36px; background: #161f32; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #f8fafc; font-size: 13px; font-family: 'Manrope', sans-serif; outline: none; }
+  .search-input {
+    width: 100%; padding: 9px 12px 9px 36px;
+    background: #161f32; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; color: #f8fafc; font-size: 13px; font-family: 'Manrope', sans-serif;
+    outline: none; transition: border-color 0.15s;
+  }
   .search-input::placeholder { color: #475569; }
   .search-input:focus { border-color: rgba(37,99,235,0.5); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
-  .filter-select { padding: 9px 32px 9px 12px; background: #161f32; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #f8fafc; font-size: 13px; font-family: 'Manrope', sans-serif; outline: none; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; min-width: 140px; }
+  .filter-select {
+    padding: 9px 32px 9px 12px;
+    background: #161f32; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; color: #f8fafc; font-size: 13px; font-family: 'Manrope', sans-serif;
+    outline: none; cursor: pointer; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center; min-width: 140px;
+  }
 
-  .btn-primary { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: 'Manrope', sans-serif; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
+  /* ── Buttons ── */
+  .btn-primary {
+    display: flex; align-items: center; gap: 6px;
+    padding: 9px 16px; background: #2563eb; color: white;
+    border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
+    font-family: 'Manrope', sans-serif; cursor: pointer; white-space: nowrap; transition: background 0.15s;
+  }
   .btn-primary:hover { background: #3b82f6; }
-  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn-ghost { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; background: transparent; color: #64748b; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; font-size: 12px; font-family: 'Manrope', sans-serif; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .btn-success {
+    display: flex; align-items: center; gap: 6px;
+    padding: 9px 16px; background: #10b981; color: white;
+    border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
+    font-family: 'Manrope', sans-serif; cursor: pointer; white-space: nowrap; transition: background 0.15s;
+  }
+  .btn-success:hover { background: #34d399; }
+  .btn-success:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+  .btn-ghost {
+    display: flex; align-items: center; gap: 5px;
+    padding: 6px 10px; background: transparent; color: #64748b;
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; font-size: 12px;
+    font-family: 'Manrope', sans-serif; cursor: pointer; transition: all 0.15s;
+  }
   .btn-ghost:hover { color: #f8fafc; border-color: rgba(255,255,255,0.2); }
-  .btn-danger { display: inline-flex; align-items: center; padding: 6px 8px; background: transparent; color: #64748b; border: none; border-radius: 5px; cursor: pointer; transition: all 0.15s; }
+  .btn-danger {
+    display: flex; align-items: center; padding: 6px 8px; background: transparent;
+    color: #64748b; border: none; border-radius: 5px; cursor: pointer; transition: all 0.15s;
+  }
   .btn-danger:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
-  .btn-success { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: 'Manrope', sans-serif; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
-  .btn-success:hover { background: #059669; }
-  .btn-success:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  .table-wrap { background: #161f32; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; overflow: hidden; }
+  /* ── Desktop Table ── */
+  .table-wrap {
+    background: #161f32; border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px; overflow: hidden;
+  }
   table { width: 100%; border-collapse: collapse; }
-  th { padding: 11px 16px; text-align: left; font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #475569; background: #0d1526; border-bottom: 1px solid rgba(255,255,255,0.06); white-space: nowrap; }
-  td { padding: 13px 16px; font-size: 13px; color: #cbd5e1; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle; }
+  thead {}
+  th {
+    padding: 11px 16px; text-align: left;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #475569; background: #0d1526;
+    border-bottom: 1px solid rgba(255,255,255,0.06); white-space: nowrap;
+  }
+  td {
+    padding: 13px 16px; font-size: 13px; color: #cbd5e1;
+    border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle;
+  }
   tr:last-child td { border-bottom: none; }
   tbody tr { transition: background 0.1s; }
   tbody tr:hover td { background: rgba(30,41,59,0.6); }
   .clinic-name-cell { display: flex; align-items: center; gap: 8px; }
   .clinic-name-text { font-weight: 600; color: #f8fafc; }
-  .link-icon { color: #475569; cursor: pointer; transition: color 0.15s; display: flex; flex-shrink: 0; }
+  .link-icon { color: #475569; cursor: pointer; transition: color 0.15s; display: flex; }
   .link-icon:hover { color: #3b82f6; }
+  .contact-name { font-weight: 500; color: #f8fafc; }
+  .contact-email { font-size: 11px; color: #475569; margin-top: 1px; }
   .actions-cell { display: flex; align-items: center; gap: 4px; opacity: 0; transition: opacity 0.15s; }
   tbody tr:hover .actions-cell { opacity: 1; }
 
+  /* ── Mobile Card List ── */
   .clinic-card-list { display: none; flex-direction: column; gap: 8px; }
-  .clinic-list-card { background: #161f32; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; cursor: pointer; }
-  .clinic-list-card-icon { width: 38px; height: 38px; background: rgba(37,99,235,0.15); border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #3b82f6; }
+  .clinic-list-card {
+    background: #161f32; border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px; padding: 14px 16px;
+    display: flex; align-items: center; gap: 12px;
+    cursor: pointer; transition: background 0.1s;
+  }
+  .clinic-list-card:active { background: rgba(30,41,59,0.8); }
+  .clinic-list-card-icon {
+    width: 38px; height: 38px; background: rgba(37,99,235,0.15);
+    border-radius: 9px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; color: #3b82f6; font-size: 16px;
+  }
   .clinic-list-card-body { flex: 1; min-width: 0; }
   .clinic-list-card-name { font-size: 14px; font-weight: 600; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .clinic-list-card-sub { font-size: 12px; color: #64748b; margin-top: 2px; }
   .clinic-list-card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
 
+  /* ── Status badges ── */
   .status-dropdown-wrap { position: relative; display: inline-flex; }
-  .status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; border: 1px solid; white-space: nowrap; cursor: pointer; transition: opacity 0.15s; user-select: none; }
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 8px 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    border: 1px solid; white-space: nowrap; cursor: pointer; transition: opacity 0.15s; user-select: none;
+  }
   .status-badge:hover { opacity: 0.8; }
-  .status-badge-ro { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; border: 1px solid; white-space: nowrap; }
+  .status-badge-readonly {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; border: 1px solid; white-space: nowrap;
+  }
   .status-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
-  .status-dropdown { position: absolute; top: calc(100% + 6px); left: 0; z-index: 50; background: #1e293b; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); overflow: hidden; min-width: 190px; animation: dropIn 0.12s ease; }
-  @keyframes dropIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
-  .status-option { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; font-size: 12px; font-weight: 500; color: #cbd5e1; transition: background 0.1s; border: none; background: none; width: 100%; text-align: left; }
+  .status-dropdown {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
+    background: #1e293b; border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    overflow: hidden; min-width: 190px;
+    animation: dropIn 0.12s ease;
+  }
+  @keyframes dropIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+  .status-option {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px; cursor: pointer; font-size: 12px; font-weight: 500;
+    color: #cbd5e1; transition: background 0.1s; border: none; background: none;
+    width: 100%; text-align: left;
+  }
   .status-option:hover { background: rgba(255,255,255,0.06); color: #f8fafc; }
   .status-option.active { color: #f8fafc; background: rgba(37,99,235,0.15); }
   .status-option-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 
-  .fu-badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 20px; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
-  .fu-active    { background: rgba(74,222,128,0.12);  color: #4ade80; }
-  .fu-paused    { background: rgba(245,158,11,0.12);  color: #f59e0b; }
-  .fu-done      { background: rgba(148,163,184,0.12); color: #94a3b8; }
-  .fu-cancelled { background: rgba(239,68,68,0.12);   color: #ef4444; }
+  /* ── Empty state ── */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 60px 20px; color: #475569; text-align: center;
+  }
+  .empty-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.4; }
+  .empty-title { font-size: 14px; font-weight: 600; color: #64748b; }
+  .empty-sub { font-size: 12px; margin-top: 4px; }
 
+  /* ── Pipeline ── */
   .pipeline-list { display: flex; flex-direction: column; gap: 2px; }
-  .stage-row { background: #161f32; border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; overflow: hidden; transition: border-color 0.15s, background 0.15s; }
+  .stage-row {
+    background: #161f32; border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 8px; overflow: hidden; transition: border-color 0.15s, background 0.15s;
+  }
   .stage-row.drag-over { border-color: #2563eb; background: rgba(37,99,235,0.05); }
-  .stage-header { display: flex; align-items: center; gap: 12px; padding: 14px 18px; cursor: pointer; user-select: none; transition: background 0.1s; }
+  .stage-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px; cursor: pointer; user-select: none; transition: background 0.1s;
+  }
   .stage-header:hover { background: rgba(30,41,59,0.5); }
   .stage-chevron { color: #475569; transition: transform 0.2s; flex-shrink: 0; display: flex; }
   .stage-chevron.open { transform: rotate(90deg); }
-  .stage-dot-lg { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .stage-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .stage-label { font-size: 13px; font-weight: 600; color: #cbd5e1; flex: 1; }
-  .stage-count { min-width: 22px; height: 22px; padding: 0 7px; background: #2563eb; color: white; border-radius: 11px; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .stage-count {
+    min-width: 22px; height: 22px; padding: 0 7px;
+    background: #2563eb; color: white; border-radius: 11px;
+    font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+  }
   .stage-count.zero { background: rgba(255,255,255,0.06); color: #475569; }
   .stage-cards { padding: 4px 12px 12px; display: flex; flex-wrap: wrap; gap: 8px; }
   .stage-drop-hint { padding: 8px 18px 12px; font-size: 11px; color: #334155; font-style: italic; }
-  .clinic-card { background: #0B1121; border: 1px solid rgba(255,255,255,0.08); border-left: 3px solid; border-radius: 7px; padding: 12px 14px; min-width: 200px; max-width: 260px; transition: all 0.15s; display: flex; align-items: flex-start; gap: 10px; cursor: grab; }
+
+  .clinic-card {
+    background: #0B1121; border: 1px solid rgba(255,255,255,0.08);
+    border-left: 3px solid; border-radius: 7px; padding: 12px 14px;
+    min-width: 200px; max-width: 260px;
+    transition: all 0.15s; display: flex; align-items: flex-start; gap: 10px;
+    cursor: grab;
+  }
   .clinic-card:active { cursor: grabbing; }
   .clinic-card:hover { border-color: rgba(37,99,235,0.5); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
   .clinic-card.dragging { opacity: 0.35; transform: scale(0.97); }
-  .card-icon { width: 32px; height: 32px; background: rgba(37,99,235,0.15); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; color: #3b82f6; }
+  .card-icon {
+    width: 32px; height: 32px; background: rgba(37,99,235,0.15);
+    border-radius: 7px; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0; color: #3b82f6;
+  }
   .card-info { flex: 1; min-width: 0; }
   .card-name { font-size: 13px; font-weight: 600; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .card-contact { font-size: 11px; color: #64748b; margin-top: 2px; }
   .card-date { font-size: 10px; color: #475569; margin-top: 3px; font-family: 'JetBrains Mono', monospace; }
 
-  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; }
-  .modal { background: #161f32; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 48px rgba(0,0,0,0.6); animation: modalIn 0.2s ease; }
-  .modal-lg { max-width: 760px; }
-  @keyframes modalIn { from { opacity:0; transform:translateY(-10px) scale(0.98); } to { opacity:1; transform:none; } }
-  .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid rgba(255,255,255,0.07); position: sticky; top: 0; background: #161f32; z-index: 1; }
+  /* ── Modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px); z-index: 100;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal {
+    background: #161f32; border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.6); animation: modalIn 0.2s ease;
+  }
+  @keyframes modalIn { from { opacity: 0; transform: translateY(-10px) scale(0.98); } to { opacity: 1; transform: none; } }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 24px 16px; border-bottom: 1px solid rgba(255,255,255,0.07);
+    position: sticky; top: 0; background: #161f32; z-index: 1;
+  }
   .modal-title { font-size: 16px; font-weight: 700; color: #f8fafc; }
-  .modal-close { background: none; border: none; color: #475569; cursor: pointer; padding: 4px; border-radius: 5px; transition: all 0.15s; display: flex; }
+  .modal-close {
+    background: none; border: none; color: #475569; cursor: pointer;
+    padding: 4px; border-radius: 5px; transition: all 0.15s; font-size: 18px; line-height: 1;
+  }
   .modal-close:hover { color: #f8fafc; background: rgba(255,255,255,0.07); }
   .modal-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
-  .modal-footer { padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.07); display: flex; justify-content: flex-end; gap: 10px; position: sticky; bottom: 0; background: #161f32; }
+  .modal-footer {
+    padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.07);
+    display: flex; justify-content: flex-end; gap: 10px;
+    position: sticky; bottom: 0; background: #161f32;
+  }
+
+  /* Launch modal — trigger picker */
+  .trigger-grid {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px;
+  }
+  .trigger-btn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; gap: 4px; min-height: 92px; padding: 16px 12px;
+    background: #0B1121; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
+    cursor: pointer; transition: border-color 0.15s, background 0.15s; font-family: 'Manrope', sans-serif;
+  }
+  .trigger-btn:hover { background: rgba(255,255,255,0.03); }
+  @media (min-width: 560px) {
+    .trigger-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
 
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
   .form-group { display: flex; flex-direction: column; gap: 6px; }
   .form-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #475569; }
-  .form-input, .form-select { padding: 10px 12px; background: #0B1121; border: 1px solid rgba(255,255,255,0.1); border-radius: 7px; color: #f8fafc; font-size: 13px; font-family: 'Manrope', sans-serif; outline: none; transition: border-color 0.15s, box-shadow 0.15s; width: 100%; }
-  .form-input:focus, .form-select:focus { border-color: rgba(37,99,235,0.5); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+  .form-input, .form-select, .form-textarea {
+    padding: 10px 12px;
+    background: #0B1121; border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 7px; color: #f8fafc; font-size: 14px; font-family: 'Manrope', sans-serif;
+    outline: none; transition: border-color 0.15s, box-shadow 0.15s; width: 100%;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: rgba(37,99,235,0.5); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
   .form-select { appearance: none; cursor: pointer; }
-  .form-input::placeholder { color: #334155; }
-  .form-textarea { padding: 10px 12px; background: #0B1121; border: 1px solid rgba(255,255,255,0.1); border-radius: 7px; color: #f8fafc; font-size: 12px; font-family: 'JetBrains Mono', monospace; outline: none; transition: border-color 0.15s; width: 100%; resize: vertical; line-height: 1.6; }
-  .form-textarea:focus { border-color: rgba(37,99,235,0.5); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+  .form-textarea { resize: vertical; line-height: 1.5; }
+  .form-input::placeholder, .form-textarea::placeholder { color: #334155; }
 
-  .toast { position: fixed; bottom: 80px; right: 16px; z-index: 200; background: #1e293b; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #f8fafc; box-shadow: 0 8px 24px rgba(0,0,0,0.4); animation: toastIn 0.2s ease; max-width: 300px; }
-  @keyframes toastIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+  /* ── Toast ── */
+  .toast {
+    position: fixed; bottom: 80px; right: 16px; z-index: 200;
+    background: #1e293b; border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #f8fafc;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4); animation: toastIn 0.2s ease; max-width: 280px;
+  }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
-  .detail-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(3px); z-index: 80; display: flex; justify-content: flex-end; }
-  .detail-panel { width: 480px; background: #161f32; border-left: 1px solid rgba(255,255,255,0.08); height: 100%; overflow-y: auto; display: flex; flex-direction: column; animation: slideIn 0.2s ease; }
-  @keyframes slideIn { from { transform:translateX(20px); opacity:0; } to { transform:none; opacity:1; } }
-  .detail-header { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.07); display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; position: sticky; top: 0; background: #161f32; z-index: 1; }
+  /* ── Detail Panel ── */
+  .detail-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(3px); z-index: 80; display: flex; justify-content: flex-end;
+  }
+  .detail-panel {
+    width: 440px; background: #161f32; border-left: 1px solid rgba(255,255,255,0.08);
+    height: 100%; overflow-y: auto; display: flex; flex-direction: column; animation: slideIn 0.2s ease;
+  }
+  @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .detail-header {
+    padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.07);
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    position: sticky; top: 0; background: #161f32; z-index: 1;
+  }
   .detail-title { font-size: 17px; font-weight: 700; color: #f8fafc; }
-  .detail-meta { font-size: 11px; color: #475569; margin-top: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .detail-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.07); padding: 0 20px; }
-  .detail-tab { padding: 12px 14px; font-size: 13px; font-weight: 600; color: #475569; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; font-family: 'Manrope', sans-serif; }
-  .detail-tab:hover { color: #94a3b8; }
+  .detail-meta { font-size: 11px; color: #475569; margin-top: 3px; }
+  .detail-tabs {
+    display: flex; gap: 2px; padding: 0 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    position: sticky; top: 61px; background: #161f32; z-index: 1;
+  }
+  .detail-tab {
+    background: none; border: none; cursor: pointer;
+    padding: 12px 14px; font-size: 13px; font-weight: 600;
+    color: #64748b; font-family: 'Manrope', sans-serif;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s; white-space: nowrap;
+  }
+  .detail-tab:hover { color: #cbd5e1; }
   .detail-tab.active { color: #f8fafc; border-bottom-color: #2563eb; }
-  .detail-body { padding: 20px; display: flex; flex-direction: column; gap: 20px; flex: 1; }
+  .detail-body { padding: 20px; display: flex; flex-direction: column; gap: 20px; }
   .detail-section-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #475569; margin-bottom: 10px; }
   .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .info-label { font-size: 10px; color: #475569; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
   .info-value { font-size: 13px; color: #f8fafc; margin-top: 2px; font-weight: 500; word-break: break-word; }
 
+  /* ── Tasks ── */
   .task-list { display: flex; flex-direction: column; gap: 6px; }
-  .task-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: rgba(11,17,33,0.6); border: 1px solid rgba(255,255,255,0.06); border-radius: 7px; transition: background 0.1s; }
+  .task-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    background: rgba(11,17,33,0.6); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 7px; transition: background 0.1s;
+  }
   .task-item:hover { background: rgba(30,41,59,0.5); }
-  .task-checkbox { width: 20px; height: 20px; border-radius: 5px; border: 1.5px solid rgba(255,255,255,0.2); background: transparent; cursor: pointer; flex-shrink: 0; transition: all 0.15s; display: flex; align-items: center; justify-content: center; }
+  .task-checkbox {
+    width: 20px; height: 20px; border-radius: 5px; border: 1.5px solid rgba(255,255,255,0.2);
+    background: transparent; cursor: pointer; flex-shrink: 0; transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center;
+  }
   .task-checkbox.done { background: #10b981; border-color: #10b981; }
   .task-name { flex: 1; font-size: 13px; color: #cbd5e1; }
   .task-name.done { text-decoration: line-through; color: #475569; }
-  .task-delete { background: none; border: none; color: #334155; cursor: pointer; padding: 4px; border-radius: 3px; transition: color 0.1s; }
+  .task-delete { background: none; border: none; color: #334155; cursor: pointer; padding: 4px; border-radius: 3px; transition: color 0.1s; font-size: 14px; }
   .task-delete:hover { color: #ef4444; }
   .add-task-row { display: flex; gap: 8px; margin-top: 4px; }
-  .add-task-input { flex: 1; padding: 10px 12px; background: rgba(11,17,33,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; color: #f8fafc; font-size: 13px; font-family: 'Manrope', sans-serif; outline: none; }
+  .add-task-input {
+    flex: 1; padding: 10px 12px; background: rgba(11,17,33,0.6);
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 6px;
+    color: #f8fafc; font-size: 14px; font-family: 'Manrope', sans-serif; outline: none;
+  }
   .add-task-input:focus { border-color: rgba(37,99,235,0.4); }
   .task-progress { height: 3px; background: rgba(255,255,255,0.07); border-radius: 2px; margin-bottom: 10px; }
   .task-progress-bar { height: 100%; background: #10b981; border-radius: 2px; transition: width 0.3s; }
   .task-progress-label { font-size: 10px; color: #475569; margin-bottom: 6px; }
 
-  .fu-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; background: rgba(11,17,33,0.6); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; }
-  .fu-row-body { flex: 1; min-width: 0; }
-  .fu-row-name { font-size: 13px; font-weight: 600; color: #f8fafc; }
-  .fu-row-meta { font-size: 11px; color: #475569; margin-top: 2px; }
-  .fu-row-actions { display: flex; gap: 4px; flex-shrink: 0; align-items: flex-start; }
-
-  .suggest-banner { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: rgba(37,99,235,0.08); border: 1px solid rgba(37,99,235,0.25); border-radius: 8px; }
-  .suggest-text { flex: 1; }
-  .suggest-title { font-weight: 700; font-size: 13px; color: #bfdbfe; margin-bottom: 2px; }
-  .suggest-body { font-size: 12px; color: #93c5fd; }
-
-  .seq-card { background: #161f32; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; overflow: hidden; transition: border-color 0.2s; }
-  .seq-card:hover { border-color: rgba(255,255,255,0.14); }
-  .seq-card-header { display: flex; align-items: center; gap: 14px; padding: 16px 18px; }
-  .seq-trigger-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
-  .seq-step-pill { width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .seq-connector { width: 12px; height: 1px; background: rgba(255,255,255,0.12); flex-shrink: 0; }
-  .seq-preview { border-top: 1px solid rgba(255,255,255,0.07); padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; }
-  .seq-step-preview { background: #0B1121; border: 1px solid rgba(255,255,255,0.07); border-radius: 7px; padding: 10px 14px; }
-
-  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
-  .stat-card { background: #161f32; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 18px 20px; }
-  .stat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #475569; margin-bottom: 10px; }
-  .stat-value { font-size: 28px; font-weight: 700; color: #f8fafc; font-family: 'JetBrains Mono', monospace; }
-
-  .trigger-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .trigger-btn { background: #0B1121; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px 16px; cursor: pointer; text-align: left; transition: border-color 0.2s; }
-
-  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; color: #475569; text-align: center; }
-  .empty-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.4; }
-  .empty-title { font-size: 14px; font-weight: 600; color: #64748b; }
-  .empty-sub { font-size: 12px; margin-top: 4px; }
-
-  .login-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #0B1121; padding: 20px; }
-  .login-card { background: #161f32; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 40px; width: 100%; max-width: 380px; box-shadow: 0 24px 48px rgba(0,0,0,0.5); }
-  .login-title { font-size: 20px; font-weight: 700; color: #f8fafc; margin-bottom: 24px; }
-  .login-error { padding: 10px 12px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 7px; font-size: 12px; color: #ef4444; }
-  .btn-login { padding: 11px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; font-family: 'Manrope', sans-serif; cursor: pointer; transition: background 0.15s; }
-  .btn-login:hover { background: #3b82f6; }
-
-  .fab { display: none; position: fixed; bottom: 72px; right: 16px; z-index: 55; width: 52px; height: 52px; border-radius: 50%; background: #2563eb; color: white; border: none; cursor: pointer; font-size: 24px; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(37,99,235,0.5); }
   .loading { display: flex; align-items: center; justify-content: center; height: 100%; color: #475569; font-size: 14px; }
+  /* ── Simple Login ── */
+  .login-page {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; background: #0B1121; padding: 20px;
+  }
+  .login-card {
+    background: #161f32; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px; padding: 40px; width: 100%; max-width: 380px;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.5);
+  }
+  .login-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+  .login-logo img { width: 36px; height: 36px; }
+  .login-logo-text { line-height: 1.2; }
+  .login-logo-name { font-size: 14px; font-weight: 700; color: #f8fafc; }
+  .login-title { font-size: 20px; font-weight: 700; color: #f8fafc; margin-bottom: 24px; }
+  .login-form { display: flex; flex-direction: column; gap: 14px; }
+  .login-error {
+    padding: 10px 12px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 7px; font-size: 12px; color: #ef4444; margin-bottom: 8px;
+  }
+  .btn-login {
+    padding: 11px; background: #2563eb; color: white; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600;
+    font-family: 'Manrope', sans-serif; cursor: pointer; transition: background 0.15s;
+  }
+  .btn-login:hover { background: #3b82f6; }
+  .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
+  /* ── Logout button ── */
+  .logout-btn {
+    display: flex; align-items: center; gap: 7px; width: 100%;
+    padding: 9px 10px; margin-top: auto; border: none; background: none;
+    color: #475569; font-size: 12px; font-weight: 500; font-family: 'Manrope', sans-serif;
+    cursor: pointer; border-radius: 7px; transition: all 0.15s; text-align: left;
+    text-decoration: none;
+  }
+  .logout-btn:hover { color: #ef4444; background: rgba(239,68,68,0.08); }
+
+  /* ── FAB (mobile add button) ── */
+  .fab {
+    display: none;
+    position: fixed; bottom: 72px; right: 16px; z-index: 55;
+    width: 52px; height: 52px; border-radius: 50%;
+    background: #2563eb; color: white; border: none; cursor: pointer;
+    font-size: 24px; align-items: center; justify-content: center;
+    box-shadow: 0 4px 16px rgba(37,99,235,0.5); transition: background 0.15s;
+  }
+  .fab:active { background: #3b82f6; }
+
+  /* ── Prospecting ── */
+  .prospecting-search-bar { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; }
+  .prospecting-search-bar .form-select { min-width: 180px; }
+  .prospecting-search-bar .form-input { flex: 1; }
+  .score-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 26px; padding: 2px 8px; border-radius: 12px;
+    font-weight: 700; font-size: 12px; color: white;
+  }
+  .no-site { color: #ef4444; font-weight: 600; font-size: 12px; }
+  .has-site { color: #64748b; font-size: 12px; }
+  .has-site a { color: #60a5fa; }
+  .detail-row td { padding: 0; }
+  .detail-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px; padding: 16px 20px; background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .detail-block h4 {
+    margin: 0 0 8px; font-size: 11px; color: #475569; text-transform: uppercase;
+    letter-spacing: 0.06em; font-weight: 600;
+  }
+  .detail-block label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; margin-bottom: 8px; color: #94a3b8; }
+  .detail-block label input[type="checkbox"] { flex-direction: row; width: auto; }
+  .auto-signals { list-style: none; margin: 0; padding: 0; font-size: 12px; color: #94a3b8; }
+  .auto-signals li { padding: 3px 0; }
+  .auto-signals li.on { color: #ef4444; }
+  .maps-link { display: inline-block; margin-top: 6px; font-size: 12px; color: #60a5fa; }
+  .crm-push-status { margin: 0 0 8px; font-size: 12px; }
+  .crm-push-status.pushed { color: #2563eb; font-weight: 600; }
+  .crm-push-status.muted { color: #475569; }
+  .push-crm-btn { font-size: 12px; padding: 7px 12px; }
+
+  /* ── Responsive breakpoints ── */
 
   @media (max-width: 768px) {
-    .sidebar { display: none; } .bottom-nav { display: block; } .fab { display: flex; }
-    .main-header { padding: 16px 16px 0; } .page-title { font-size: 20px; } .main-content { padding: 14px 16px 80px; }
-    .table-wrap { display: none; } .clinic-card-list { display: flex; }
-    .search-wrap { flex: 1 1 100%; } .filter-select { flex: 1; min-width: 0; font-size: 12px; }
-    .btn-primary.header-add-btn { display: none; }
-    .detail-panel { width: 100%; border-left: none; }
-    .modal-overlay { align-items: flex-end; padding: 0; } .modal { border-radius: 16px 16px 0 0; max-height: 92vh; }
-    .form-row { grid-template-columns: 1fr; } .form-row-3 { grid-template-columns: 1fr 1fr; }
-    .clinic-card { min-width: 0; max-width: 100%; width: 100%; } .stage-cards { flex-direction: column; }
-    .toast { bottom: 72px; right: 12px; left: 12px; max-width: none; text-align: center; }
-    .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; } .trigger-grid { grid-template-columns: 1fr; }
-  }
-  @media (min-width: 769px) { .toast { bottom: 24px; right: 24px; } }
-`;
+    .sidebar { display: none; }
+    .bottom-nav { display: block; }
+    .fab { display: flex; }
 
+    /* 6 items no longer fit the original padding (sized for 4-5) — tighten
+       up and add horizontal scroll as a safety net on narrower phones. */
+    .bottom-nav-inner { justify-content: flex-start; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .bottom-nav-item { padding: 6px 14px; flex-shrink: 0; }
+
+    .main-header { padding: 16px 16px 0; }
+    .page-title { font-size: 20px; }
+    .main-content { padding: 14px 16px 80px; }
+
+    /* Hide desktop table, show card list */
+    .table-wrap { display: none; }
+    .clinic-card-list { display: flex; }
+
+    /* Toolbar: stack search full width, filter below */
+    .toolbar { flex-wrap: wrap; }
+    .search-wrap { flex: 1 1 100%; }
+    .filter-select { flex: 1; min-width: 0; font-size: 12px; }
+    .btn-primary.header-add-btn { display: none; }
+
+    /* Prospecting search bar stacks on mobile */
+    .prospecting-search-bar { flex-wrap: wrap; }
+    .prospecting-search-bar .form-select,
+    .prospecting-search-bar .form-input { flex: 1 1 100%; }
+
+    /* Detail panel full width on mobile */
+    .detail-panel { width: 100%; border-left: none; }
+
+    /* Modal full-screen-ish on mobile */
+    .modal-overlay { align-items: flex-end; padding: 0; }
+    .modal { border-radius: 16px 16px 0 0; max-height: 92vh; }
+
+    /* Form rows become single column */
+    .form-row { grid-template-columns: 1fr; }
+
+    /* Pipeline cards full width on mobile */
+    .clinic-card { min-width: 0; max-width: 100%; width: 100%; }
+    .stage-cards { flex-direction: column; }
+
+    /* Toast above bottom nav */
+    .toast { bottom: 72px; right: 12px; left: 12px; max-width: none; text-align: center; }
+  }
+
+  @media (min-width: 769px) {
+    .toast { bottom: 24px; right: 24px; }
+  }
+`;;
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -535,6 +995,7 @@ const Ic = {
   Dashboard:    () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
   Pipeline:     () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
   Followup:     () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+  Book:         () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
   Plus:         () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
   Search:       () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
   Edit:         () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
@@ -546,7 +1007,6 @@ const Ic = {
   ChevronDown:  () => <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>,
   Clinic:       () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>,
   Mail:         () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
-  Sms:          () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
   Play:         () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
   Pause:        () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>,
   Stop:         () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>,
@@ -559,25 +1019,39 @@ const Ic = {
 
 function StatusDropdown({ status, onChange }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
   const ref = useRef(null);
   const c = STATUS_COLORS[status] || STATUS_COLORS.lead;
   const dot = STAGE_DOT[status] || "#94a3b8";
+
+  const handleOpen = e => {
+    e.stopPropagation();
+    if (!open && ref.current) {
+      const r = ref.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, left: r.left });
+    }
+    setOpen(o => !o);
+  };
+
   useEffect(() => {
     if (!open) return;
     const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const s = () => setOpen(false);
     document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
+    window.addEventListener("scroll", s, true);
+    return () => { document.removeEventListener("mousedown", h); window.removeEventListener("scroll", s, true); };
   }, [open]);
+
   return (
     <div className="status-dropdown-wrap" ref={ref}>
       <span className="status-badge" style={{ background: c.bg, color: c.text, borderColor: c.border }}
-        onClick={e => { e.stopPropagation(); setOpen(o => !o); }}>
+        onClick={handleOpen}>
         <span className="status-dot" style={{ background: dot }} />
         {stageLabel(status)}
         <span style={{ marginLeft: 2, opacity: 0.5, display: "flex" }}><Ic.ChevronDown /></span>
       </span>
       {open && (
-        <div className="status-dropdown">
+        <div className="status-dropdown" style={{ position:"fixed", top: pos.top, left: pos.left, zIndex: 9999 }}>
           {PIPELINE_STAGES.map(s => (
             <button key={s.id} className={"status-option" + (s.id === status ? " active" : "")}
               onClick={e => { e.stopPropagation(); onChange(s.id); setOpen(false); }}>
@@ -617,19 +1091,19 @@ function Toast({ message, onDone }) {
 function ClinicModal({ clinic, onSave, onClose }) {
   const [form, setForm] = useState(clinic
     ? { ...clinic }
-    : { name:"", contact_name:"", contact_email:"", contact_phone:"", website:"", status:"lead", start_date:"", package:"" }
+    : { name:"", contact_name:"", contact_email:"", contact_phone:"", website:"", status:"lead", start_date:"", package: INTAKE_PACKAGE, industry:"", source:"", priority:"", lead_note:"" }
   );
   const s = (k, v) => setForm(f => ({ ...f, [k]: v }));
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <span className="modal-title">{clinic ? "Edit Clinic" : "Add Clinic"}</span>
+          <span className="modal-title">{clinic ? "Edit Business" : "Add Business"}</span>
           <button className="modal-close" onClick={onClose}><Ic.X /></button>
         </div>
         <div className="modal-body">
           <div className="form-group">
-            <label className="form-label">Clinic Name *</label>
+            <label className="form-label">Business Name *</label>
             <input className="form-input" value={form.name} onChange={e => s("name", e.target.value)} placeholder="e.g. Spinal Health Center" />
           </div>
           <div className="form-row">
@@ -637,16 +1111,15 @@ function ClinicModal({ clinic, onSave, onClose }) {
             <div className="form-group"><label className="form-label">Phone</label><input className="form-input" value={form.contact_phone} onChange={e => s("contact_phone", e.target.value)} placeholder="(555) 000-0000" /></div>
           </div>
           <div className="form-row">
-            <div className="form-group"><label className="form-label">Email</label><input className="form-input" value={form.contact_email} onChange={e => s("contact_email", e.target.value)} placeholder="dr@clinic.com" /></div>
-            <div className="form-group"><label className="form-label">Website</label><input className="form-input" value={form.website} onChange={e => s("website", e.target.value)} placeholder="https://clinic.com" /></div>
+            <div className="form-group"><label className="form-label">Email</label><input className="form-input" value={form.contact_email} onChange={e => s("contact_email", e.target.value)} placeholder="owner@business.com" /></div>
+            <div className="form-group"><label className="form-label">Website</label><input className="form-input" value={form.website} onChange={e => s("website", e.target.value)} placeholder="https://business.com" /></div>
           </div>
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Package</label>
               <select className="form-select" value={form.package || ""} onChange={e => s("package", e.target.value)}>
                 <option value="">Select package...</option>
-                <optgroup label="Individual">{PACKAGES.individual.map(p => <option key={p} value={p}>{p}</option>)}</optgroup>
-                <optgroup label="Bundles">{PACKAGES.bundles.map(p => <option key={p} value={p}>{p}</option>)}</optgroup>
+                {PACKAGES.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div className="form-group">
@@ -660,10 +1133,42 @@ function ClinicModal({ clinic, onSave, onClose }) {
             <label className="form-label">Start Date</label>
             <input type="date" className="form-input" value={form.start_date} onChange={e => s("start_date", e.target.value)} />
           </div>
+
+          <div style={{ borderTop:"1px solid rgba(255,255,255,0.07)", margin:"6px 0 2px", paddingTop:14 }}>
+            <div className="form-label" style={{ marginBottom:12, color:"#60a5fa" }}>Prospecting</div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Industry / Trade</label>
+                <select className="form-select" value={form.industry || ""} onChange={e => s("industry", e.target.value)}>
+                  <option value="">Select trade...</option>
+                  {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Priority</label>
+                <select className="form-select" value={form.priority || ""} onChange={e => s("priority", e.target.value)}>
+                  <option value="">Unrated</option>
+                  {PRIORITIES.map(p => <option key={p.id} value={p.id}>{p.label} — {p.hint}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Source</label>
+              <select className="form-select" value={form.source || ""} onChange={e => s("source", e.target.value)}>
+                <option value="">Where did you find them?</option>
+                {LEAD_SOURCES.map(sr => <option key={sr} value={sr}>{sr}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">The Leak / Angle</label>
+              <textarea className="form-textarea" rows={2} value={form.lead_note || ""} onChange={e => s("lead_note", e.target.value)}
+                placeholder="The one concrete problem you'll show on camera — e.g. no mobile booking, broken contact form, missed-call gap" />
+            </div>
+          </div>
         </div>
         <div className="modal-footer">
           <button className="btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" onClick={() => { if (form.name.trim()) onSave(form); }}>{clinic ? "Save Changes" : "Add Clinic"}</button>
+          <button className="btn-primary" onClick={() => { if (form.name.trim()) onSave(form); }}>{clinic ? "Save Changes" : "Add Business"}</button>
         </div>
       </div>
     </div>
@@ -746,7 +1251,7 @@ function LaunchModal({ clinic, sequences, prefillTrigger, onLaunch, onClose }) {
             </div>
             <div className="modal-body">
               <div style={{ padding:"12px 14px", background:"rgba(11,17,33,0.6)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:8 }}>
-                <div style={{ fontSize:11, color:"#475569", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700, marginBottom:6 }}>Clinic</div>
+                <div style={{ fontSize:11, color:"#475569", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700, marginBottom:6 }}>Business</div>
                 <div style={{ fontWeight:700, color:"#f8fafc", fontSize:14 }}>{clinic.name}</div>
                 <div style={{ color:"#64748b", fontSize:12, marginTop:2 }}>{clinic.contact_name || "&#8212;"} &middot; {clinic.contact_email || "no email"}</div>
               </div>
@@ -763,9 +1268,9 @@ function LaunchModal({ clinic, sequences, prefillTrigger, onLaunch, onClose }) {
                     {seq.steps.map((s, i) => (
                       <div key={s.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", background:"rgba(11,17,33,0.6)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:7 }}>
                         <span style={{ color:"#475569", fontSize:11, fontFamily:"monospace", minWidth:16 }}>#{i+1}</span>
-                        <span style={{ color: s.channel === "email" ? "#60a5fa" : "#a78bfa" }}>{s.channel === "email" ? <Ic.Mail /> : <Ic.Sms />}</span>
+                        <span style={{ color:"#60a5fa" }}><Ic.Mail /></span>
                         <span style={{ color:"#94a3b8", fontSize:12, flex:1 }}>
-                          {s.channel === "email" ? (s.subject || "No subject") : "SMS"} &middot; {i === 0 ? "Immediately" : `+${s.delay} ${s.delayUnit}`}
+                          {s.subject || "No subject"} &middot; {stepDelayLabel(s, i)}
                         </span>
                       </div>
                     ))}
@@ -787,24 +1292,29 @@ function LaunchModal({ clinic, sequences, prefillTrigger, onLaunch, onClose }) {
 // ─── Message Preview Modal ────────────────────────────────────────────────────
 
 function MsgPreviewModal({ step, clinic, onClose }) {
+  const bodyText = renderBody(step.body, clinic);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{ color: step.channel === "email" ? "#60a5fa" : "#a78bfa" }}>{step.channel === "email" ? <Ic.Mail /> : <Ic.Sms />}</span>
-            <span className="modal-title">{step.channel === "email" ? "Email" : "SMS"} Preview</span>
+            <span style={{ color:"#60a5fa" }}><Ic.Mail /></span>
+            <span className="modal-title">Email Preview</span>
           </div>
           <button className="modal-close" onClick={onClose}><Ic.X /></button>
         </div>
         <div className="modal-body">
-          {step.channel === "email" && step.subject && (
+          {step.subject && (
             <div style={{ padding:"8px 12px", background:"rgba(96,165,250,0.08)", borderRadius:6, fontSize:13, color:"#bfdbfe", fontWeight:600 }}>
               Subject: {renderBody(step.subject, clinic)}
             </div>
           )}
-          <div style={{ padding:14, background:"#0B1121", border:"1px solid rgba(255,255,255,0.08)", borderRadius:8, fontSize:13, color:"#cbd5e1", lineHeight:1.7, whiteSpace:"pre-wrap", fontFamily: step.channel === "sms" ? "monospace" : "inherit" }}>
-            {renderBody(step.body, clinic)}
+          <div style={{ borderRadius:8, overflow:"hidden", border:"1px solid rgba(255,255,255,0.08)" }}>
+            <iframe
+              title="Email preview"
+              srcDoc={wrapEmailHtml(bodyText)}
+              style={{ width:"100%", height:360, border:"none", display:"block", background:"#F4F7FB" }}
+            />
           </div>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <span className={`fu-badge ${step.status === "sent" ? "fu-active" : "fu-paused"}`}>{step.status}</span>
@@ -824,7 +1334,7 @@ function ClinicPickerModal({ clinics, onSelect, onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <span className="modal-title">Select Clinic</span>
+          <span className="modal-title">Select Business</span>
           <button className="modal-close" onClick={onClose}><Ic.X /></button>
         </div>
         <div className="modal-body">
@@ -852,7 +1362,7 @@ function ClinicPickerModal({ clinics, onSelect, onClose }) {
 // ─── Sequence Editor Modal ────────────────────────────────────────────────────
 
 function SequenceEditorModal({ seq, onSave, onClose }) {
-  const [form, setForm] = useState(seq || { id:`seq_${Date.now()}`, name:"", trigger:"new_client", active:true, steps:[] });
+  const [form, setForm] = useState(seq || { id:`seq_${Date.now()}`, name:"", trigger:"prospect_outreach", active:true, steps:[] });
   const [editStep, setEditStep] = useState(null);
 
   const addStep = () => {
@@ -874,7 +1384,7 @@ function SequenceEditorModal({ seq, onSave, onClose }) {
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Name</label>
-              <input className="form-input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. New Client Welcome" />
+              <input className="form-input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Prospect Follow-up" />
             </div>
             <div className="form-group">
               <label className="form-label">Trigger</label>
@@ -896,24 +1406,21 @@ function SequenceEditorModal({ seq, onSave, onClose }) {
                 <div onClick={() => setEditStep(editStep === step.id ? null : step.id)}
                   style={{ padding:"11px 14px", display:"flex", alignItems:"center", gap:10, cursor:"pointer", background:"#0B1121" }}>
                   <span style={{ color:"#475569", fontSize:11, fontFamily:"monospace", minWidth:18 }}>#{idx+1}</span>
-                  <span style={{ color: step.channel === "email" ? "#60a5fa" : "#a78bfa" }}>{step.channel === "email" ? <Ic.Mail /> : <Ic.Sms />}</span>
+                  <span style={{ color:"#60a5fa" }}><Ic.Mail /></span>
                   <span style={{ color:"#94a3b8", fontSize:13, flex:1 }}>
-                    {step.channel === "email" ? (step.subject || "No subject") : "SMS"} &middot; {idx === 0 ? "Immediately" : `+${step.delay} ${step.delayUnit}`}
+                    {step.subject || "No subject"} &middot; {stepDelayLabel(step, idx)}
                   </span>
                   <button onClick={e => { e.stopPropagation(); rem(step.id); }} style={{ background:"none", border:"none", color:"#475569", cursor:"pointer", padding:4 }}><Ic.Trash /></button>
                 </div>
                 {editStep === step.id && (
                   <div style={{ padding:14, borderTop:"1px solid rgba(255,255,255,0.07)", display:"flex", flexDirection:"column", gap:12 }}>
                     <div className="form-row-3">
-                      <div className="form-group"><label className="form-label">Channel</label><select className="form-select" value={step.channel} onChange={e => upd(step.id,{channel:e.target.value})}><option value="email">Email</option><option value="sms">SMS</option></select></div>
                       <div className="form-group"><label className="form-label">Wait</label><input type="number" min={0} className="form-input" value={step.delay} onChange={e => upd(step.id,{delay:Number(e.target.value)})}/></div>
                       <div className="form-group"><label className="form-label">Unit</label><select className="form-select" value={step.delayUnit} onChange={e => upd(step.id,{delayUnit:e.target.value})}><option value="minutes">Minutes</option><option value="hours">Hours</option><option value="days">Days</option></select></div>
                     </div>
-                    {step.channel === "email" && (
-                      <div className="form-group"><label className="form-label">Subject</label><input className="form-input" value={step.subject} onChange={e => upd(step.id,{subject:e.target.value})} placeholder="Email subject line"/></div>
-                    )}
+                    <div className="form-group"><label className="form-label">Subject</label><input className="form-input" value={step.subject||""} onChange={e => upd(step.id,{subject:e.target.value})} placeholder="Email subject line"/></div>
                     <div className="form-group">
-                      <label className="form-label">Body &mdash; use &#123;&#123;first_name&#125;&#125;, &#123;&#123;clinic_name&#125;&#125;</label>
+                      <label className="form-label">Body &mdash; use &#123;&#123;first_name&#125;&#125;, &#123;&#123;business_name&#125;&#125;</label>
                       <textarea className="form-textarea" rows={5} value={step.body} onChange={e => upd(step.id,{body:e.target.value})} />
                     </div>
                   </div>
@@ -1020,19 +1527,32 @@ function DetailPanel({ clinic, sequences, onClose, onUpdate, onOpenLaunch }) {
                   {clinic.package && <div style={{ gridColumn:"span 2" }}><div className="info-label">Package</div><div className="info-value" style={{ color:"#3b82f6", fontWeight:700 }}>{clinic.package}</div></div>}
                 </div>
               </div>
+              {(clinic.industry || clinic.source || clinic.priority || clinic.lead_note) && (
+                <div>
+                  <div className="detail-section-title">Prospect</div>
+                  <div className="info-grid">
+                    {clinic.industry && <div><div className="info-label">Trade</div><div className="info-value">{clinic.industry}</div></div>}
+                    {clinic.priority && (() => { const p = getPriority(clinic.priority); return p ? (
+                      <div><div className="info-label">Priority</div>
+                        <div className="info-value"><span style={{ display:"inline-flex", alignItems:"center", gap:6 }}><span style={{ width:8, height:8, borderRadius:"50%", background:p.color }} />{p.label} <span style={{ color:"#475569", fontSize:11 }}>· {p.hint}</span></span></div>
+                      </div>) : null; })()}
+                    {clinic.source && <div style={{ gridColumn: clinic.industry && clinic.priority ? "span 2" : "auto" }}><div className="info-label">Source</div><div className="info-value" style={{ fontSize:13 }}>{clinic.source}</div></div>}
+                  </div>
+                  {clinic.lead_note && (
+                    <div style={{ marginTop:10, padding:"10px 12px", background:"rgba(96,165,250,0.08)", border:"1px solid rgba(96,165,250,0.2)", borderRadius:8 }}>
+                      <div className="info-label" style={{ marginBottom:4 }}>The Leak / Angle</div>
+                      <div style={{ fontSize:13, color:"#cbd5e1", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{clinic.lead_note}</div>
+                    </div>
+                  )}
+                </div>
+              )}
               <div>
-                <div className="detail-section-title">Accounts Needed</div>
+                <div className="detail-section-title">Compliance Essentials — client must provide</div>
                 <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
                   {(() => {
-                    const a = new Set();
-                    cTasks.forEach(t => {
-                      if (t.name.includes("Calendly"))                                              a.add("Calendly");
-                      if (t.name.includes("form tool") || t.name.includes("Tally") || t.name.includes("Typeform")) a.add("Form Tool");
-                      if (t.name.includes("Zapier") || t.name.includes("Make"))                    a.add("Zapier/Make");
-                      if (t.name.includes("Twilio"))                                               a.add("Twilio");
-                    });
-                    if (!a.size) return <span style={{ fontSize:12, color:"#64748b" }}>None required</span>;
-                    return [...a].map(x => (
+                    const accounts = PACKAGE_ACCOUNTS[clinic.package] || [];
+                    if (!accounts.length) return <span style={{ fontSize:12, color:"#64748b" }}>{clinic.package ? "None required" : "Select a package to see requirements"}</span>;
+                    return accounts.map(x => (
                       <span key={x} style={{ padding:"5px 11px", background:"rgba(59,130,246,0.1)", border:"1px solid rgba(59,130,246,0.3)", borderRadius:6, fontSize:11, fontWeight:600, color:"#60a5fa" }}>{x}</span>
                     ));
                   })()}
@@ -1049,64 +1569,105 @@ function DetailPanel({ clinic, sequences, onClose, onUpdate, onOpenLaunch }) {
 
           {/* ── TASKS ── */}
           {tab === "tasks" && (
-            [["alignment", aTasks, "alignmentTasks", "\uD83E\uDDD1\u200D\uD83D\uDCBB Alignment Automations"],
-             ["clinic",    cTasks, "clinicTasks",    "\uD83C\uDFE5 Clinic"]].map(([type, tasks, key, label]) => {
-              const secs = [...new Set(tasks.map(t => t.section).filter(Boolean))];
-              return (
-                <div key={type}>
-                  <div className="detail-section-title" style={{ display:"flex", alignItems:"center", gap:6 }}>{label}</div>
-                  {secs.map(sec => {
-                    const st = tasks.filter(t => t.section === sec);
-                    const sd = st.filter(t => t.done).length;
-                    const isExp = expanded[type + "-" + sec];
-                    return (
-                      <div key={sec} style={{ marginBottom:10 }}>
-                        <div onClick={() => toggleExp(type + "-" + sec)}
-                          style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", background:"rgba(11,17,33,0.6)", borderRadius:6, cursor:"pointer", userSelect:"none" }}>
-                          <span style={{ transform: isExp ? "rotate(90deg)" : "none", transition:"transform 0.2s", fontSize:10, color:"#64748b" }}>&#9654;</span>
-                          <span style={{ fontSize:11, fontWeight:700, color:"#cbd5e1", textTransform:"uppercase", letterSpacing:"0.08em", flex:1 }}>{sec}</span>
-                          <span style={{ fontSize:10, color:"#64748b", fontFamily:"'JetBrains Mono',monospace" }}>{sd}/{st.length}</span>
-                        </div>
-                        {isExp && (
-                          <div className="task-list" style={{ marginTop:6 }}>
-                            {st.map(t => (
-                              <div key={t.id} className="task-item">
-                                <div className={"task-checkbox" + (t.done ? " done" : "")}
-                                  onClick={() => onUpdate({ ...clinic, [key]: tasks.map(x => x.id === t.id ? { ...x, done: !x.done } : x) })}>
-                                  {t.done && <Ic.Check />}
-                                </div>
-                                <span className={"task-name" + (t.done ? " done" : "")}>{t.name}</span>
-                                <button className="task-delete" onClick={() => onUpdate({ ...clinic, [key]: tasks.filter(x => x.id !== t.id) })}>&#x2715;</button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+            <>
+              {/* Package badge + progress */}
+              {clinic.package ? (
+                <div style={{ padding:"12px 16px", background:"rgba(37,99,235,0.1)", border:"1px solid rgba(59,130,246,0.25)", borderRadius:8, marginBottom:18, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <div>
+                    <span style={{ fontSize:10, color:"#60a5fa", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em" }}>Package</span>
+                    <div style={{ color:"#f8fafc", fontWeight:700, fontSize:14, marginTop:2 }}>{clinic.package}</div>
+                  </div>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ color:"#64748b", fontSize:11 }}>{doneT} of {allT.length} done</div>
+                    <div style={{ width:80, height:4, background:"rgba(255,255,255,0.07)", borderRadius:2, marginTop:5 }}>
+                      <div style={{ height:"100%", background:"#3b82f6", borderRadius:2, width: pct + "%" }} />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding:"10px 14px", background:"rgba(255,255,255,0.03)", border:"1px dashed rgba(255,255,255,0.1)", borderRadius:8, marginBottom:18, fontSize:12, color:"#64748b" }}>
+                  No package selected. Edit this business to assign a package and load the task checklist.
+                </div>
+              )}
+
+              {/* Task sections: Your Tasks + Client Tasks */}
+              {[
+                { type:"alignment", tasks:aTasks, key:"alignmentTasks", label:"Your Tasks", sublabel:"Alignment Automations (Matthew)", accent:"#3b82f6" },
+                { type:"business",  tasks:cTasks, key:"clinicTasks",    label:"Client Tasks", sublabel:"What the business owner needs to complete", accent:"#10b981" },
+              ].map(({ type, tasks, key, label, sublabel, accent }) => {
+                const secs = [...new Set(tasks.map(t => t.section).filter(Boolean))];
+                const doneCount = tasks.filter(t => t.done).length;
+                return (
+                  <div key={type} style={{ marginBottom:24 }}>
+                    {/* Section header */}
+                    <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+                      <div style={{ width:3, height:36, background:accent, borderRadius:2, flexShrink:0 }} />
+                      <div>
+                        <div style={{ color:"#f8fafc", fontWeight:700, fontSize:13 }}>{label}</div>
+                        <div style={{ color:"#64748b", fontSize:11, marginTop:1 }}>{sublabel} &middot; {doneCount}/{tasks.length}</div>
                       </div>
-                    );
-                  })}
-                  <div className="add-task-row">
-                    <input className="add-task-input"
-                      placeholder={`Add ${type === "alignment" ? "Alignment" : "Clinic"} task\u2026`}
-                      value={type === "alignment" ? newATask : newCTask}
-                      onChange={e => type === "alignment" ? setNewATask(e.target.value) : setNewCTask(e.target.value)}
-                      onKeyDown={e => {
+                    </div>
+
+                    {tasks.length === 0 ? (
+                      <div style={{ fontSize:12, color:"#475569", padding:"8px 0 4px 13px" }}>No tasks loaded. Assign a package to populate this list.</div>
+                    ) : (
+                      secs.map(sec => {
+                        const st = tasks.filter(t => t.section === sec);
+                        const sd = st.filter(t => t.done).length;
+                        const isExp = expanded[type + "-" + sec] !== false; // default expanded
+                        return (
+                          <div key={sec} style={{ marginBottom:8 }}>
+                            <div onClick={() => toggleExp(type + "-" + sec)}
+                              style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 12px", background:"rgba(11,17,33,0.6)", borderRadius:6, cursor:"pointer", userSelect:"none", borderLeft:`3px solid ${sd === st.length && sd > 0 ? accent : "rgba(255,255,255,0.06)"}` }}>
+                              <span style={{ transform: isExp ? "rotate(90deg)" : "none", transition:"transform 0.2s", fontSize:10, color:"#64748b" }}>&#9654;</span>
+                              <span style={{ fontSize:11, fontWeight:700, color: sd === st.length && sd > 0 ? accent : "#cbd5e1", textTransform:"uppercase", letterSpacing:"0.08em", flex:1 }}>{sec}</span>
+                              <span style={{ fontSize:10, color: sd === st.length && sd > 0 ? accent : "#64748b", fontFamily:"'JetBrains Mono',monospace" }}>{sd}/{st.length}</span>
+                            </div>
+                            {isExp && (
+                              <div className="task-list" style={{ marginTop:4 }}>
+                                {st.map(t => (
+                                  <div key={t.id} className="task-item">
+                                    <div className={"task-checkbox" + (t.done ? " done" : "")}
+                                      style={t.done ? { borderColor:accent, background:accent+"22" } : {}}
+                                      onClick={() => onUpdate({ ...clinic, [key]: tasks.map(x => x.id === t.id ? { ...x, done: !x.done } : x) })}>
+                                      {t.done && <Ic.Check />}
+                                    </div>
+                                    <span className={"task-name" + (t.done ? " done" : "")}>{t.name}</span>
+                                    <button className="task-delete" onClick={() => onUpdate({ ...clinic, [key]: tasks.filter(x => x.id !== t.id) })}>&#x2715;</button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+
+                    {/* Add custom task */}
+                    <div className="add-task-row" style={{ marginTop:6 }}>
+                      <input className="add-task-input"
+                        placeholder={`Add ${label.toLowerCase()} task…`}
+                        value={type === "alignment" ? newATask : newCTask}
+                        onChange={e => type === "alignment" ? setNewATask(e.target.value) : setNewCTask(e.target.value)}
+                        onKeyDown={e => {
+                          const v = type === "alignment" ? newATask : newCTask;
+                          if (e.key === "Enter" && v.trim()) {
+                            onUpdate({ ...clinic, [key]: [...tasks, { id: uid(), name: v.trim(), done: false }] });
+                            type === "alignment" ? setNewATask("") : setNewCTask("");
+                          }
+                        }} />
+                      <button className="btn-primary" style={{ padding:"8px 12px", fontSize:12 }} onClick={() => {
                         const v = type === "alignment" ? newATask : newCTask;
-                        if (e.key === "Enter" && v.trim()) {
+                        if (v.trim()) {
                           onUpdate({ ...clinic, [key]: [...tasks, { id: uid(), name: v.trim(), done: false }] });
                           type === "alignment" ? setNewATask("") : setNewCTask("");
                         }
-                      }} />
-                    <button className="btn-primary" style={{ padding:"8px 12px", fontSize:12 }} onClick={() => {
-                      const v = type === "alignment" ? newATask : newCTask;
-                      if (v.trim()) {
-                        onUpdate({ ...clinic, [key]: [...tasks, { id: uid(), name: v.trim(), done: false }] });
-                        type === "alignment" ? setNewATask("") : setNewCTask("");
-                      }
-                    }}>Add</button>
+                      }}>Add</button>
+                    </div>
                   </div>
-                </div>
-              );
-            })
+                );
+              })}
+            </>
           )}
 
           {/* ── FOLLOW-UPS ── */}
@@ -1117,7 +1678,7 @@ function DetailPanel({ clinic, sequences, onClose, onUpdate, onOpenLaunch }) {
                 <div className="empty-state" style={{ padding:"32px 0" }}>
                   <div className="empty-icon">&#9889;</div>
                   <div className="empty-title">No sequences yet</div>
-                  <div className="empty-sub">Launch a follow-up sequence for this clinic</div>
+                  <div className="empty-sub">Launch a follow-up sequence for this business</div>
                   <button className="btn-primary" style={{ marginTop:16 }} onClick={() => onOpenLaunch(clinic)}>
                     <Ic.Zap /> Launch Sequence
                   </button>
@@ -1151,7 +1712,7 @@ function DetailPanel({ clinic, sequences, onClose, onUpdate, onOpenLaunch }) {
                                   {fu.steps.map((s, i) => (
                                     <button key={s.id} onClick={() => setPreviewStep(s)}
                                       style={{ display:"flex", alignItems:"center", gap:4, padding:"4px 8px", borderRadius:5, background: s.status === "sent" ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.05)", border:`1px solid ${s.status === "sent" ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.08)"}`, cursor:"pointer", fontSize:11, color: s.status === "sent" ? "#4ade80" : "#64748b" }}>
-                                      {s.channel === "email" ? <Ic.Mail /> : <Ic.Sms />} #{i+1}
+                                      <Ic.Mail /> #{i+1}
                                     </button>
                                   ))}
                                 </div>
@@ -1222,18 +1783,18 @@ function DashboardView({ clinics, sequences, onAdd, onEdit, onDelete, onSelect, 
     <>
       <div className="main-header">
         <div>
-          <div className="page-title">Clinics</div>
+          <div className="page-title">Businesses</div>
           <div className="page-subtitle">
             {clinics.length} total &middot; {clinics.filter(c => (c.followUps||[]).some(f => f.status === "active")).length} with active follow-ups
           </div>
         </div>
-        <button className="btn-primary header-add-btn" onClick={onAdd}><Ic.Plus /> Add Clinic</button>
+        <button className="btn-primary header-add-btn" onClick={onAdd}><Ic.Plus /> Add Business</button>
       </div>
       <div className="main-content">
         <div className="toolbar">
           <div className="search-wrap">
             <span className="search-icon"><Ic.Search /></span>
-            <input className="search-input" placeholder="Search clinics&#8230;" value={search} onChange={e => setSearch(e.target.value)} />
+            <input className="search-input" placeholder="Search businesses&#8230;" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <select className="filter-select" value={filter} onChange={e => setFilter(e.target.value)}>
             <option value="all">All Statuses</option>
@@ -1244,14 +1805,14 @@ function DashboardView({ clinics, sequences, onAdd, onEdit, onDelete, onSelect, 
         {/* Desktop table */}
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Clinic</th><th>Contact</th><th>Package</th><th>Status</th><th>Follow-ups</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Business</th><th>Contact</th><th>Package</th><th>Status</th><th>Follow-ups</th><th>Actions</th></tr></thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr><td colSpan={6}>
                   <div className="empty-state">
                     <div className="empty-icon">&#127973;</div>
-                    <div className="empty-title">{clinics.length === 0 ? "No clinics yet" : "No results"}</div>
-                    <div className="empty-sub">{clinics.length === 0 ? "Click 'Add Clinic' to get started" : "Adjust search or filter"}</div>
+                    <div className="empty-title">{clinics.length === 0 ? "No businesses yet" : "No results"}</div>
+                    <div className="empty-sub">{clinics.length === 0 ? "Click 'Add Business' to get started" : "Adjust search or filter"}</div>
                   </div>
                 </td></tr>
               ) : filtered.map(c => {
@@ -1261,7 +1822,9 @@ function DashboardView({ clinics, sequences, onAdd, onEdit, onDelete, onSelect, 
                   <tr key={c.id}>
                     <td>
                       <div className="clinic-name-cell">
+                        {c.priority && (() => { const p = getPriority(c.priority); return p ? <span title={`${p.label} · ${p.hint}`} style={{ width:8, height:8, borderRadius:"50%", background:p.color, flexShrink:0 }} /> : null; })()}
                         <span className="clinic-name-text">{c.name}</span>
+                        {c.industry && <span style={{ fontSize:10, color:"#475569", background:"rgba(255,255,255,0.05)", padding:"2px 6px", borderRadius:4 }}>{c.industry}</span>}
                         <span className="link-icon" onClick={() => onSelect(c)}><Ic.ExternalLink /></span>
                       </div>
                     </td>
@@ -1302,7 +1865,7 @@ function DashboardView({ clinics, sequences, onAdd, onEdit, onDelete, onSelect, 
           {filtered.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon">&#127973;</div>
-              <div className="empty-title">{clinics.length === 0 ? "No clinics yet" : "No results"}</div>
+              <div className="empty-title">{clinics.length === 0 ? "No businesses yet" : "No results"}</div>
               <div className="empty-sub">{clinics.length === 0 ? "Tap + to add" : "Adjust search"}</div>
             </div>
           ) : filtered.map(c => {
@@ -1345,57 +1908,70 @@ function PipelineView({ clinics, sequences, onSelect, onStatusChange, onOpenLaun
       </div>
       <div className="main-content">
         <div className="pipeline-list">
-          {PIPELINE_STAGES.map(stage => {
-            const stageClinics = clinics.filter(c => c.status === stage.id);
-            const isOpen = open[stage.id];
-            const isOver = dragOver === stage.id;
+          {PIPELINE_GROUPS.map((group, gi) => {
+            const groupStages = PIPELINE_STAGES.filter(s => s.group === group.id);
+            const groupTotal  = clinics.filter(c => groupStages.some(s => s.id === c.status)).length;
             return (
-              <div key={stage.id} className={"stage-row" + (isOver ? " drag-over" : "")}
-                onDragOver={e => { e.preventDefault(); setDragOver(stage.id); }}
-                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(null); }}
-                onDrop={e => { e.preventDefault(); if (dragId.current) { onStatusChange(dragId.current, stage.id); dragId.current = null; } setDragOver(null); setDragging(null); }}>
-                <div className="stage-header" onClick={() => setOpen(o => ({ ...o, [stage.id]: !o[stage.id] }))}>
-                  <span className={"stage-chevron" + (isOpen ? " open" : "")}><Ic.ChevronRight /></span>
-                  <span className="stage-dot-lg" style={{ background: stage.color }} />
-                  <span className="stage-label">{stage.label}</span>
-                  <span className={"stage-count" + (stageClinics.length === 0 ? " zero" : "")}>{stageClinics.length}</span>
+              <div key={group.id} style={{ marginBottom: gi < PIPELINE_GROUPS.length - 1 ? 28 : 0 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8, paddingBottom:8, borderBottom:"1px solid rgba(255,255,255,0.07)" }}>
+                  <span style={{ fontWeight:700, fontSize:13, color:"#f8fafc", letterSpacing:"0.02em" }}>{group.label}</span>
+                  <span style={{ fontSize:11, color:"#475569" }}>{group.description}</span>
+                  <span style={{ marginLeft:"auto", fontSize:11, color:"#475569" }}>{groupTotal} clinic{groupTotal !== 1 ? "s" : ""}</span>
                 </div>
-                {isOpen && (stageClinics.length > 0 ? (
-                  <div className="stage-cards">
-                    {stageClinics.map(c => {
-                      const activeFu  = (c.followUps||[]).filter(f => f.status === "active");
-                      const hasSuggest = !activeFu.length && STAGE_AUTO_TRIGGER[c.status] && sequences.some(s => s.trigger === STAGE_AUTO_TRIGGER[c.status] && s.active);
-                      return (
-                        <div key={c.id} className={"clinic-card" + (dragging === c.id ? " dragging" : "")}
-                          style={{ borderLeftColor: stage.color }}
-                          draggable
-                          onDragStart={e => { dragId.current = c.id; setDragging(c.id); e.dataTransfer.effectAllowed = "move"; }}
-                          onDragEnd={() => { dragId.current = null; setDragging(null); setDragOver(null); }}
-                          onClick={() => onSelect(c)}>
-                          <div className="card-icon"><Ic.Clinic /></div>
-                          <div className="card-info">
-                            <div className="card-name">{c.name}</div>
-                            <div className="card-contact">{c.contact_name || "&#8212;"}</div>
-                            <div className="card-date">{formatDate(c.start_date)}</div>
-                            {activeFu.length > 0 && (
-                              <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:5 }}>
-                                <span style={{ width:6, height:6, borderRadius:"50%", background:"#4ade80", display:"inline-block" }} />
-                                <span style={{ fontSize:10, color:"#4ade80" }}>{activeFu.length} sequence{activeFu.length > 1 ? "s" : ""} running</span>
+                {groupStages.map(stage => {
+                  const stageClinics = clinics.filter(c => c.status === stage.id);
+                  const isOpen = open[stage.id];
+                  const isOver = dragOver === stage.id;
+                  return (
+                    <div key={stage.id} className={"stage-row" + (isOver ? " drag-over" : "")}
+                      onDragOver={e => { e.preventDefault(); setDragOver(stage.id); }}
+                      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(null); }}
+                      onDrop={e => { e.preventDefault(); if (dragId.current) { onStatusChange(dragId.current, stage.id); dragId.current = null; } setDragOver(null); setDragging(null); }}>
+                      <div className="stage-header" onClick={() => setOpen(o => ({ ...o, [stage.id]: !o[stage.id] }))}>
+                        <span className={"stage-chevron" + (isOpen ? " open" : "")}><Ic.ChevronRight /></span>
+                        <span className="stage-dot-lg" style={{ background: stage.color }} />
+                        <span className="stage-label">{stage.label}</span>
+                        <span className={"stage-count" + (stageClinics.length === 0 ? " zero" : "")}>{stageClinics.length}</span>
+                      </div>
+                      {isOpen && (stageClinics.length > 0 ? (
+                        <div className="stage-cards">
+                          {stageClinics.map(c => {
+                            const activeFu  = (c.followUps||[]).filter(f => f.status === "active");
+                            const hasSuggest = !activeFu.length && STAGE_AUTO_TRIGGER[c.status] && sequences.some(s => s.trigger === STAGE_AUTO_TRIGGER[c.status] && s.active);
+                            return (
+                              <div key={c.id} className={"clinic-card" + (dragging === c.id ? " dragging" : "")}
+                                style={{ borderLeftColor: stage.color }}
+                                draggable
+                                onDragStart={e => { dragId.current = c.id; setDragging(c.id); e.dataTransfer.effectAllowed = "move"; }}
+                                onDragEnd={() => { dragId.current = null; setDragging(null); setDragOver(null); }}
+                                onClick={() => onSelect(c)}>
+                                <div className="card-icon"><Ic.Clinic /></div>
+                                <div className="card-info">
+                                  <div className="card-name">{c.name}</div>
+                                  <div className="card-contact">{c.contact_name || "&#8212;"}</div>
+                                  <div className="card-date">{formatDate(c.start_date)}</div>
+                                  {activeFu.length > 0 && (
+                                    <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:5 }}>
+                                      <span style={{ width:6, height:6, borderRadius:"50%", background:"#4ade80", display:"inline-block" }} />
+                                      <span style={{ fontSize:10, color:"#4ade80" }}>{activeFu.length} sequence{activeFu.length > 1 ? "s" : ""} running</span>
+                                    </div>
+                                  )}
+                                  {hasSuggest && (
+                                    <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:5 }}
+                                      onClick={e => { e.stopPropagation(); onOpenLaunch(c); }}>
+                                      <span style={{ width:6, height:6, borderRadius:"50%", background:"#3b82f6", display:"inline-block" }} />
+                                      <span style={{ fontSize:10, color:"#60a5fa", cursor:"pointer" }}>Follow-up suggested &#8599;</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            )}
-                            {hasSuggest && (
-                              <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:5 }}
-                                onClick={e => { e.stopPropagation(); onOpenLaunch(c); }}>
-                                <span style={{ width:6, height:6, borderRadius:"50%", background:"#3b82f6", display:"inline-block" }} />
-                                <span style={{ fontSize:10, color:"#60a5fa", cursor:"pointer" }}>Follow-up suggested &#8599;</span>
-                              </div>
-                            )}
-                          </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
-                  </div>
-                ) : <div className="stage-drop-hint">Drop a clinic here</div>)}
+                      ) : <div className="stage-drop-hint">Drop a business here</div>)}
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
@@ -1423,7 +1999,7 @@ function FollowupView({ clinics, sequences, setSequences, onOpenLaunch, onSelect
   const persistSequences = async (next) => {
     setSeqSaving(true);
     try {
-      await fetch(`${API_BASE}/sequences`, {
+      await apiFetch(`/sequences`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(next),
@@ -1508,7 +2084,7 @@ function FollowupView({ clinics, sequences, setSequences, onOpenLaunch, onSelect
               <div className="empty-state">
                 <div className="empty-icon">&#9889;</div>
                 <div className="empty-title">No follow-ups yet</div>
-                <div className="empty-sub">Launch a sequence from a clinic, or click Launch above</div>
+                <div className="empty-sub">Launch a sequence from a business, or click Launch above</div>
               </div>
             ) : (
               <>
@@ -1531,7 +2107,7 @@ function FollowupView({ clinics, sequences, setSequences, onOpenLaunch, onSelect
                       {/* Clinic rows */}
                       <table>
                         <thead>
-                          <tr><th>Clinic</th><th>Progress</th><th>Status</th><th>Launched</th><th></th></tr>
+                          <tr><th>Business</th><th>Progress</th><th>Status</th><th>Launched</th><th></th></tr>
                         </thead>
                         <tbody>
                           {seqFu.sort((a,b) => b.triggeredAt - a.triggeredAt).map(fu => {
@@ -1577,7 +2153,7 @@ function FollowupView({ clinics, sequences, setSequences, onOpenLaunch, onSelect
                       <span style={{ color:"#475569", fontSize:11, fontFamily:"'JetBrains Mono',monospace" }}>{completedFu.length}</span>
                     </div>
                     <table>
-                      <thead><tr><th>Clinic</th><th>Sequence</th><th>Launched</th></tr></thead>
+                      <thead><tr><th>Business</th><th>Sequence</th><th>Launched</th></tr></thead>
                       <tbody>
                         {completedFu.slice(0,5).map(fu => (
                           <tr key={fu.id} style={{ cursor:"pointer" }} onClick={() => onSelectClinic(fu.clinic)}>
@@ -1617,21 +2193,21 @@ function FollowupView({ clinics, sequences, setSequences, onOpenLaunch, onSelect
                           <span style={{ color:"#f8fafc", fontWeight:700, fontSize:14 }}>{seq.name}</span>
                           <span className={`fu-badge ${seq.active ? "fu-active" : "fu-paused"}`}>{seq.active ? "Active" : "Paused"}</span>
                           {activeCount > 0 && <span className="fu-badge fu-active">{activeCount} running</span>}
-                          {usage > 0 && !activeCount && <span style={{ fontSize:11, color:"#64748b" }}>{usage} clinic{usage > 1 ? "s" : ""}</span>}
+                          {usage > 0 && !activeCount && <span style={{ fontSize:11, color:"#64748b" }}>{usage} business{usage !== 1 ? "es" : ""}</span>}
                         </div>
                         <div style={{ color:"#475569", fontSize:12 }}>
-                          {trig.label} &middot; {seq.steps.length} step{seq.steps.length !== 1 ? "s" : ""} &middot; {seq.steps.filter(s => s.channel==="email").length} email &middot; {seq.steps.filter(s => s.channel==="sms").length} SMS
+                          {trig.label} &middot; {seq.steps.length} email step{seq.steps.length !== 1 ? "s" : ""}
                         </div>
                         {/* Step pills */}
                         <div style={{ display:"flex", alignItems:"center", gap:3, marginTop:8, flexWrap:"wrap" }}>
                           {seq.steps.map((s,i) => (
                             <div key={s.id} style={{ display:"flex", alignItems:"center", gap:3 }}>
                               {i > 0 && <div className="seq-connector" />}
-                              <div className="seq-step-pill" style={{ background: s.channel==="email" ? "rgba(96,165,250,0.15)" : "rgba(167,139,250,0.15)", color: s.channel==="email" ? "#60a5fa" : "#a78bfa" }}>
-                                {s.channel === "email" ? <Ic.Mail /> : <Ic.Sms />}
+                              <div className="seq-step-pill" style={{ background:"rgba(96,165,250,0.15)", color:"#60a5fa" }}>
+                                <Ic.Mail />
                               </div>
                               <span style={{ fontSize:10, color:"#475569", marginRight:2 }}>
-                                {i === 0 ? "Now" : `+${s.delay}${s.delayUnit[0]}`}
+                                {stepDelayLabel(s, i, true)}
                               </span>
                             </div>
                           ))}
@@ -1659,9 +2235,9 @@ function FollowupView({ clinics, sequences, setSequences, onOpenLaunch, onSelect
                           <div key={s.id} className="seq-step-preview">
                             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom: s.body ? 6 : 0 }}>
                               <span style={{ color:"#475569", fontSize:11, fontFamily:"monospace", minWidth:46 }}>Step {i+1}</span>
-                              <span style={{ color: s.channel==="email" ? "#60a5fa" : "#a78bfa" }}>{s.channel==="email" ? <Ic.Mail /> : <Ic.Sms />}</span>
+                              <span style={{ color:"#60a5fa" }}><Ic.Mail /></span>
                               <span style={{ color:"#94a3b8", fontSize:12 }}>
-                                {i===0 ? "Immediately" : `After ${s.delay} ${s.delayUnit}`}
+                                {i===0 && !s.delay ? "Immediately" : `After ${s.delay} ${s.delayUnit}`}
                                 {s.channel==="email" && s.subject ? ` \u2014 "${s.subject}"` : ""}
                               </span>
                             </div>
@@ -1695,6 +2271,20 @@ function FollowupView({ clinics, sequences, setSequences, onOpenLaunch, onSelect
 function SimpleLogin({ onLogin }) {
   const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
+  const [checking, setChecking] = useState(false);
+  const submit = async e => {
+    e.preventDefault();
+    if (checking) return;
+    setChecking(true); setErr("");
+    const ok = await validatePassword(pw);
+    if (ok) {
+      localStorage.setItem("aa_secret", pw);
+      localStorage.setItem("aa_auth", "1");
+      onLogin();
+    } else {
+      setErr("Incorrect password"); setPw(""); setChecking(false);
+    }
+  };
   return (
     <>
       <style>{css}</style>
@@ -1702,17 +2292,409 @@ function SimpleLogin({ onLogin }) {
         <div className="login-card">
           <div className="brand-name" style={{ fontSize:18, marginBottom:24 }}>Alignment Automations</div>
           <div className="login-title">Enter Password</div>
-          <form style={{ display:"flex", flexDirection:"column", gap:14 }} onSubmit={e => {
-            e.preventDefault();
-            if (pw === APP_PASSWORD) { localStorage.setItem("aa_auth","1"); onLogin(); }
-            else { setErr("Incorrect password"); setPw(""); }
-          }}>
+          <form style={{ display:"flex", flexDirection:"column", gap:14 }} onSubmit={submit}>
             {err && <div className="login-error">{err}</div>}
             <div className="form-group">
               <input className="form-input" type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="Password" required autoFocus />
             </div>
-            <button className="btn-login" type="submit">Sign in</button>
+            <button className="btn-login" type="submit" disabled={checking}>{checking ? "Signing in…" : "Sign in"}</button>
           </form>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Playbook View ────────────────────────────────────────────────────────────
+
+function PlaybookView() {
+  const ref = useRef(null);
+
+  // Re-wire the playbook's interactivity natively: persistent checklist + TOC scroll.
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+
+    // Persistent daily checklist (mirrors the standalone doc's localStorage behavior).
+    const boxes = [...root.querySelectorAll(".chk")];
+    const handlers = [];
+    boxes.forEach((el, i) => {
+      const key = "aa_chk_" + i;
+      try { if (localStorage.getItem(key) === "1") el.classList.add("on"); } catch (_) {}
+      const h = () => {
+        el.classList.toggle("on");
+        try { localStorage.setItem(key, el.classList.contains("on") ? "1" : "0"); } catch (_) {}
+      };
+      el.addEventListener("click", h);
+      handlers.push([el, h]);
+    });
+
+    const resetBtn = root.querySelector("#chk-reset");
+    const onReset = () => boxes.forEach((el, i) => {
+      el.classList.remove("on");
+      try { localStorage.setItem("aa_chk_" + i, "0"); } catch (_) {}
+    });
+    if (resetBtn) resetBtn.addEventListener("click", onReset);
+
+    // Smooth in-container scrolling for TOC + "back to contents" links.
+    const anchors = [...root.querySelectorAll('a[href^="#"]')];
+    const onAnchor = e => {
+      const id = e.currentTarget.getAttribute("href").slice(1);
+      const target = root.querySelector("#" + CSS.escape(id));
+      if (target) { e.preventDefault(); target.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    };
+    anchors.forEach(a => a.addEventListener("click", onAnchor));
+
+    return () => {
+      handlers.forEach(([el, h]) => el.removeEventListener("click", h));
+      if (resetBtn) resetBtn.removeEventListener("click", onReset);
+      anchors.forEach(a => a.removeEventListener("click", onAnchor));
+    };
+  }, []);
+
+  return (
+    <>
+      <style>{PLAYBOOK_CSS}</style>
+      <div className="main-header">
+        <div>
+          <div className="page-title">Sales Playbook</div>
+          <div className="page-subtitle">Video outreach system for finding &amp; closing home-service clients</div>
+        </div>
+        <a className="btn-ghost" href="/playbook.html" target="_blank" rel="noopener noreferrer" style={{ textDecoration:"none" }}>
+          <Ic.ExternalLink /> Open full page
+        </a>
+      </div>
+      <div className="main-content">
+        <div
+          ref={ref}
+          className="pbdoc"
+          data-theme="dark"
+          dangerouslySetInnerHTML={{ __html: PLAYBOOK_HTML }}
+        />
+      </div>
+    </>
+  );
+}
+
+// ─── Prospecting View ──────────────────────────────────────────────────────
+
+function websiteCell(p) {
+  const check = p.website_check || {};
+  if (!p.website) return <span className="no-site">No website</span>;
+  const bits = [];
+  if (check.reachable === false) bits.push("unreachable");
+  if (check.mobileFriendly === false) bits.push("not mobile-friendly");
+  if (check.builderPlatform) bits.push(check.builderPlatform);
+  return (
+    <span className="has-site">
+      <a href={p.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>site</a>
+      {bits.length > 0 && <span className="no-site"> ({bits.join(", ")})</span>}
+    </span>
+  );
+}
+
+const SOCIAL_LABELS = { facebook: "FB", instagram: "IG", twitter: "X", linkedin: "in" };
+const SOCIAL_FULL_LABELS = { facebook: "Facebook", instagram: "Instagram", twitter: "Twitter/X", linkedin: "LinkedIn" };
+
+function socialCell(p) {
+  const social = (p.website_check && p.website_check.social) || {};
+  const links = Object.keys(SOCIAL_LABELS).filter(k => social[k]);
+  if (!links.length) return <span className="no-site">&#8212;</span>;
+  return (
+    <>
+      {links.map((k, i) => (
+        <span key={k}>
+          {i > 0 && " "}
+          <a href={social[k]} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>{SOCIAL_LABELS[k]}</a>
+        </span>
+      ))}
+    </>
+  );
+}
+
+const AUTO_SIGNAL_LABELS = {
+  visibleProblem: "Visible problem (no site / broken / not mobile) +3",
+  hasAgency: "Already has an agency − 3",
+  reachable: "Reachable (phone, email, or site) +1",
+  noWayToReach: "No way to reach − 2",
+  inTargetTrade: "In target trade +1",
+};
+
+const OUTREACH_STAGES = ["New", "Sent", "Watched", "Replied", "Call booked", "Proposal sent", "Closed", "Dead"];
+
+// Auto-signal display only — mirrors deriveAutoSignals in
+// functions/api/_lib/prospecting.js for the read-only signal chips.
+// Score/tier themselves are always server-computed and just displayed here.
+function autoSignalsFor(p) {
+  const check = p.website_check || {};
+  return {
+    visibleProblem: !p.website || check.reachable === false || check.mobileFriendly === false,
+    hasAgency: Boolean(check.agencyDetected),
+    reachable: Boolean(p.phone || p.email || p.website),
+    noWayToReach: !p.phone && !p.email && !p.website,
+    inTargetTrade: true,
+  };
+}
+
+function ProspectRow({ p, expanded, onToggle, onUpdate, onDelete, onPush }) {
+  const signals = p.manual_signals || { runsAds: false, growthIntent: false, ownerOperated: false };
+  const auto = autoSignalsFor(p);
+
+  return (
+    <>
+      <tr className="main-row" onClick={onToggle} style={{ cursor: "pointer" }}>
+        <td>{expanded ? "▾" : "▸"}</td>
+        <td><span className="score-badge" style={{ background: tierColor(p.tier) }}>{p.score}</span></td>
+        <td>{p.business_name}</td>
+        <td>{p.trade}</td>
+        <td>{websiteCell(p)}</td>
+        <td>{p.phone}{p.phone && p.email && <br />}{p.email}</td>
+        <td>{socialCell(p)}</td>
+        <td>{p.outreach_stage}</td>
+      </tr>
+      {expanded && (
+        <tr className="detail-row">
+          <td colSpan={8}>
+            <div className="detail-grid">
+              <div className="detail-block">
+                <h4>Signals (auto)</h4>
+                <ul className="auto-signals">
+                  {Object.entries(AUTO_SIGNAL_LABELS).map(([key, label]) => (
+                    <li key={key} className={auto[key] ? "on" : ""}>{auto[key] ? "✓" : "—"} {label}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="detail-block">
+                <h4>Signals (your call)</h4>
+                <label><input type="checkbox" checked={!!signals.runsAds} onChange={e => onUpdate(p.id, { manualSignals: { runsAds: e.target.checked } })} /> Runs Google/Facebook ads (+3)</label>
+                <label><input type="checkbox" checked={!!signals.growthIntent} onChange={e => onUpdate(p.id, { manualSignals: { growthIntent: e.target.checked } })} /> Growth intent — fresh reviews/photos/hiring (+2)</label>
+                <label><input type="checkbox" checked={!!signals.ownerOperated} onChange={e => onUpdate(p.id, { manualSignals: { ownerOperated: e.target.checked } })} /> Owner-operated, small team (+2)</label>
+              </div>
+              <div className="detail-block">
+                <h4>Contact</h4>
+                <label>Email <input className="form-input" type="text" defaultValue={p.email || ""} placeholder="none found" onBlur={e => onUpdate(p.id, { email: e.target.value })} /></label>
+                <label>Phone <input className="form-input" type="text" defaultValue={p.phone || ""} onBlur={e => onUpdate(p.id, { phone: e.target.value })} /></label>
+                {p.google_maps_url && <a href={p.google_maps_url} target="_blank" rel="noopener noreferrer" className="maps-link">Open Google Maps listing</a>}
+                <div className="social-links" style={{ marginTop: 8 }}>
+                  {Object.keys(SOCIAL_FULL_LABELS).filter(k => (p.website_check?.social || {})[k]).length === 0 ? (
+                    <div style={{ fontSize: 12, color: "#475569" }}>No social profiles found on their site</div>
+                  ) : (
+                    Object.keys(SOCIAL_FULL_LABELS).filter(k => (p.website_check?.social || {})[k]).map(k => (
+                      <div key={k} style={{ fontSize: 12 }}>
+                        <a href={p.website_check.social[k]} target="_blank" rel="noopener noreferrer">{SOCIAL_FULL_LABELS[k]}</a>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              <div className="detail-block">
+                <h4>Outreach tracker</h4>
+                <label>Channel
+                  <select className="form-select" value={p.channel || ""} onChange={e => onUpdate(p.id, { channel: e.target.value })}>
+                    <option value="">&#8212;</option>
+                    <option value="email">Email</option>
+                    <option value="sms">SMS</option>
+                    <option value="messenger">Messenger</option>
+                    <option value="instagram">Instagram DM</option>
+                  </select>
+                </label>
+                <label>Leak flagged <input className="form-input" type="text" defaultValue={p.leak_flagged || ""} placeholder="e.g. no mobile quote form" onBlur={e => onUpdate(p.id, { leakFlagged: e.target.value })} /></label>
+                <label>Date sent <input className="form-input" type="date" defaultValue={p.date_sent || ""} onChange={e => onUpdate(p.id, { dateSent: e.target.value })} /></label>
+                <label>Next follow-up <input className="form-input" type="date" defaultValue={p.next_follow_up || ""} onChange={e => onUpdate(p.id, { nextFollowUp: e.target.value })} /></label>
+                <label><input type="checkbox" checked={!!p.watched} onChange={e => onUpdate(p.id, { watched: e.target.checked })} /> Watched</label>
+                <label><input type="checkbox" checked={!!p.replied} onChange={e => onUpdate(p.id, { replied: e.target.checked })} /> Replied</label>
+                <label>Stage
+                  <select className="form-select" value={p.outreach_stage || "New"} onChange={e => onUpdate(p.id, { outreachStage: e.target.value })}>
+                    {OUTREACH_STAGES.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="detail-block">
+                <h4>Pipeline</h4>
+                {p.pushed_clinic_id ? (
+                  <p className="crm-push-status pushed">Pushed to pipeline{p.pushed_at ? ` ${new Date(p.pushed_at).toLocaleString()}` : ""}</p>
+                ) : (
+                  <>
+                    <p className="crm-push-status muted">Not pushed yet</p>
+                    <button className="btn-primary push-crm-btn" type="button" onClick={() => onPush(p.id)}>Push to Pipeline</button>
+                  </>
+                )}
+              </div>
+            </div>
+            <button className="btn-danger" type="button" onClick={() => onDelete(p.id)} style={{ margin: "0 20px 16px" }}>Remove prospect</button>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function ProspectingView({ onToast }) {
+  const [prospects, setProspects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [trade, setTrade] = useState(PROSPECT_TRADES[0].value);
+  const [location, setLocation] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchStatus, setSearchStatus] = useState("");
+  const [search, setSearch] = useState("");
+  const [tierFilter, setTierFilter] = useState("all");
+  const [expandedId, setExpandedId] = useState(null);
+  const [bulkPushing, setBulkPushing] = useState(false);
+
+  useEffect(() => {
+    prospectsDb.getAll().then(setProspects).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const handleSearch = async e => {
+    e.preventDefault();
+    if (!trade || !location.trim()) return;
+    setSearching(true);
+    setSearchStatus(`Searching for ${trade} in ${location}…`);
+    try {
+      const data = await prospectsDb.search(trade, location.trim());
+      setSearchStatus(`Added ${data.added} new prospect(s), skipped ${data.skipped} already known.`);
+      const fresh = await prospectsDb.getAll();
+      setProspects(fresh);
+    } catch (err) {
+      setSearchStatus(`Error: ${err.message}`);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const updateProspect = async (id, patch) => {
+    try {
+      const updated = await prospectsDb.update(id, patch);
+      setProspects(prev => prev.map(p => (p.id === id ? updated : p)));
+    } catch (err) {
+      onToast?.(`Error: ${err.message}`);
+    }
+  };
+
+  const deleteProspect = async id => {
+    if (!window.confirm("Remove this prospect from your list?")) return;
+    await prospectsDb.delete(id);
+    setProspects(prev => prev.filter(p => p.id !== id));
+    if (expandedId === id) setExpandedId(null);
+  };
+
+  const pushOne = async id => {
+    try {
+      const data = await prospectsDb.pushToPipeline(id);
+      if (data.clinicId) {
+        setProspects(prev => prev.map(p => (p.id === id ? { ...p, pushed_clinic_id: data.clinicId, pushed_at: data.pushedAt } : p)));
+        onToast?.("Pushed to the pipeline");
+      }
+    } catch (err) {
+      onToast?.(`Error: ${err.message}`);
+    }
+  };
+
+  const handleBulkPush = async () => {
+    const targets = prospects.filter(p => (p.tier === "Record today" || p.tier === "Warm") && !p.pushed_clinic_id);
+    if (!targets.length) {
+      onToast?.("Nothing to push — every Hot/Warm prospect is already in the pipeline.");
+      return;
+    }
+    setBulkPushing(true);
+    let done = 0;
+    for (const p of targets) {
+      try {
+        const data = await prospectsDb.pushToPipeline(p.id);
+        if (data.clinicId) {
+          setProspects(prev => prev.map(x => (x.id === p.id ? { ...x, pushed_clinic_id: data.clinicId, pushed_at: data.pushedAt } : x)));
+          done++;
+        }
+      } catch (_) { /* keep going */ }
+    }
+    setBulkPushing(false);
+    onToast?.(`Pushed ${done} of ${targets.length} to the pipeline.`);
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      const blob = await prospectsDb.exportCsv();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "prospects.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      onToast?.(`Error: ${err.message}`);
+    }
+  };
+
+  const filtered = prospects.filter(p => {
+    const q = search.toLowerCase();
+    const matchesSearch = !q || p.business_name.toLowerCase().includes(q);
+    const matchesTier = tierFilter === "all" || p.tier === tierFilter;
+    return matchesSearch && matchesTier;
+  });
+
+  const hotCount = prospects.filter(p => p.tier === "Record today").length;
+  const warmCount = prospects.filter(p => p.tier === "Warm").length;
+
+  return (
+    <>
+      <div className="main-header">
+        <div>
+          <div className="page-title">Prospecting</div>
+          <div className="page-subtitle">
+            {loading ? "Loading…" : `${prospects.length} total · ${hotCount} record today · ${warmCount} warm`}
+          </div>
+        </div>
+        <button className="btn-primary header-add-btn" onClick={handleBulkPush} disabled={bulkPushing || loading}>
+          <Ic.Zap /> {bulkPushing ? "Pushing…" : "Push Hot + Warm"}
+        </button>
+      </div>
+      <div className="main-content">
+        <form className="prospecting-search-bar" onSubmit={handleSearch}>
+          <select className="form-select" value={trade} onChange={e => setTrade(e.target.value)}>
+            {PROSPECT_TRADES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+          <input className="form-input" placeholder="City / area, e.g. San Luis Obispo, CA" value={location} onChange={e => setLocation(e.target.value)} />
+          <button className="btn-primary" type="submit" disabled={searching}>{searching ? "Searching…" : "Search"}</button>
+        </form>
+        {searchStatus && <div className="page-subtitle" style={{ marginBottom: 12 }}>{searchStatus}</div>}
+
+        <div className="toolbar">
+          <div className="search-wrap">
+            <span className="search-icon"><Ic.Search /></span>
+            <input className="search-input" placeholder="Filter by name…" value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <select className="filter-select" value={tierFilter} onChange={e => setTierFilter(e.target.value)}>
+            <option value="all">All tiers</option>
+            <option value="Record today">Record today</option>
+            <option value="Warm">Warm</option>
+            <option value="Park it">Park it</option>
+          </select>
+          <button className="btn-ghost" type="button" onClick={handleExportCsv}>Export CSV</button>
+        </div>
+
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th></th><th>Score</th><th>Business</th><th>Trade</th><th>Website</th><th>Contact</th><th>Social</th><th>Stage</th></tr></thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={8}><div className="loading">Loading…</div></td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={8}>
+                  <div className="empty-state">
+                    <div className="empty-icon">&#128269;</div>
+                    <div className="empty-title">{prospects.length === 0 ? "No prospects yet" : "No results"}</div>
+                    <div className="empty-sub">{prospects.length === 0 ? "Search a trade + city above to get started" : "Adjust search or filter"}</div>
+                  </div>
+                </td></tr>
+              ) : filtered.map(p => (
+                <ProspectRow key={p.id} p={p} expanded={expandedId === p.id}
+                  onToggle={() => setExpandedId(expandedId === p.id ? null : p.id)}
+                  onUpdate={updateProspect} onDelete={deleteProspect} onPush={pushOne} />
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </>
@@ -1722,7 +2704,7 @@ function SimpleLogin({ onLogin }) {
 // ─── App Root ─────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [authed,    setAuthed]    = useState(() => localStorage.getItem("aa_auth") === "1");
+  const [authed,    setAuthed]    = useState(() => localStorage.getItem("aa_auth") === "1" && !!localStorage.getItem("aa_secret"));
   const [clinics,   setClinics]   = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [page,      setPage]      = useState("dashboard");
@@ -1737,7 +2719,7 @@ export default function App() {
     if (!authed) { setLoading(false); return; }
     Promise.all([
       db.getAll().catch(() => []),
-      fetch(`${API_BASE}/sequences`).then(r => r.ok ? r.json() : []).catch(() => []),
+      apiFetch(`/sequences`).then(r => r.ok ? r.json() : []).catch(() => []),
     ]).then(([clinicData, seqData]) => {
       setClinics(clinicData || []);
       if (Array.isArray(seqData) && seqData.length > 0) setSequences(seqData);
@@ -1754,33 +2736,46 @@ export default function App() {
   }, []);
 
   // Called when a sequence is successfully launched — writes followUp entry back to clinic
-  const handleLaunch = useCallback(async (clinic, fu) => {
+  const handleLaunch = useCallback(async (clinic, fu, opts = {}) => {
     const updated = { ...clinic, followUps: [...(clinic.followUps || []), fu] };
     setClinics(prev => prev.map(c => c.id === clinic.id ? updated : c));
     if (selected?.id === clinic.id) setSelected(updated);
     try { await db.update(clinic.id, { followUps: updated.followUps }); } catch (_) {}
-    showToast(`Sequence launched for ${clinic.name}`);
+    if (!opts.silent) showToast(`Sequence launched for ${clinic.name}`);
   }, [selected]);
 
   const handleStatusChange = useCallback(async (id, newStatus) => {
     const clinic = clinics.find(c => c.id === id);
+    const updatedClinic = clinic ? { ...clinic, status: newStatus } : null;
     setClinics(prev => prev.map(c => c.id === id ? { ...c, status: newStatus } : c));
     setSelected(sel => sel?.id === id ? { ...sel, status: newStatus } : sel);
     try { await db.update(id, { status: newStatus }); } catch (_) {}
-    showToast(`Moved to ${stageLabel(newStatus)}`);
-    // Auto-open detail panel with follow-up suggestion when stage has a mapped trigger
-    const trigId = STAGE_AUTO_TRIGGER[newStatus];
-    if (trigId && sequences.some(s => s.trigger === trigId && s.active) && clinic) {
-      const alreadyRunning = (clinic.followUps||[]).some(f => f.trigger === trigId && f.status === "active");
-      if (!alreadyRunning) {
-        setTimeout(() => setSelected(prev => prev?.id === id ? { ...prev, status: newStatus } : { ...clinic, status: newStatus }), 350);
+
+    const trigId    = STAGE_AUTO_TRIGGER[newStatus];
+    const activeSeq = trigId && sequences.find(s => s.trigger === trigId && s.active);
+    const alreadyRan = trigId && clinic && (clinic.followUps||[]).some(f => f.trigger === trigId && (f.status === "active" || f.status === "completed"));
+
+    if (trigId === "client_won" && activeSeq && updatedClinic && !alreadyRan) {
+      // Deal just closed — auto-send the onboarding email immediately, no confirmation needed.
+      const fu = {
+        id: uid(), seqId: activeSeq.id, seqName: activeSeq.name, trigger: trigId,
+        triggeredAt: Date.now(), status: "active", currentStep: 0, totalSteps: activeSeq.steps.length,
+        steps: activeSeq.steps.map(s => ({ ...s, sentAt: null, status: "pending" })),
+      };
+      await handleLaunch(updatedClinic, fu, { silent: true });
+      showToast(`Moved to ${stageLabel(newStatus)} — onboarding email sent`);
+    } else {
+      showToast(`Moved to ${stageLabel(newStatus)}`);
+      // For non-auto-fire triggers (e.g. "Gone Quiet"), surface the suggestion instead of sending.
+      if (trigId && activeSeq && !alreadyRan) {
+        setTimeout(() => setSelected(prev => prev?.id === id ? { ...prev, status: newStatus } : updatedClinic), 350);
       }
     }
-  }, [clinics, sequences]);
+  }, [clinics, sequences, handleLaunch]);
 
   const handleSave = useCallback(async form => {
     if (modal === "add") {
-      const pt = form.package ? getPackageTasks(form.package) : DEFAULT_TASKS;
+      const pt = getPackageTasks(form.package);
       const newClinic = {
         ...form, id: uid(), created_at: new Date().toISOString(), followUps: [],
         alignmentTasks: pt.alignment.map(t => ({ ...t, id: uid() })),
@@ -1788,7 +2783,7 @@ export default function App() {
       };
       setClinics(prev => [newClinic, ...prev]);
       try { await db.create(newClinic); } catch (_) {}
-      showToast("Clinic added");
+      showToast("Business added");
     } else {
       setClinics(prev => prev.map(c => c.id === form.id ? { ...c, ...form } : c));
       if (selected?.id === form.id) setSelected(s => ({ ...s, ...form }));
@@ -1802,7 +2797,7 @@ export default function App() {
     setClinics(prev => prev.filter(c => c.id !== id));
     if (selected?.id === id) setSelected(null);
     try { await db.delete(id); } catch (_) {}
-    showToast("Clinic removed");
+    showToast("Business removed");
   }, [selected]);
 
   const handleUpdate = useCallback(async updated => {
@@ -1820,7 +2815,7 @@ export default function App() {
   if (!authed) return <SimpleLogin onLogin={() => setAuthed(true)} />;
   if (loading)  return <><style>{css}</style><div className="app"><div className="loading">Loading&#8230;</div></div></>;
 
-  const handleLogout = () => { localStorage.removeItem("aa_auth"); setAuthed(false); setClinics([]); };
+  const handleLogout = () => { localStorage.removeItem("aa_auth"); localStorage.removeItem("aa_secret"); setAuthed(false); setClinics([]); };
   const activeFuTotal = clinics.reduce((n, c) => n + (c.followUps||[]).filter(f => f.status === "active").length, 0);
 
   return (
@@ -1831,6 +2826,18 @@ export default function App() {
         {/* ── Sidebar ── */}
         <aside className="sidebar">
           <div className="sidebar-brand">
+            <svg width="34" height="34" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink:0 }}>
+              <defs>
+                <linearGradient id="sbGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#003D7A"/>
+                  <stop offset="100%" stopColor="#0066CC"/>
+                </linearGradient>
+              </defs>
+              <polygon points="60,6 106,33 106,87 60,114 14,87 14,33" fill="url(#sbGrad)"/>
+              <rect x="56" y="26" width="8" height="68" rx="4" fill="#ffffff"/>
+              <circle cx="60" cy="60" r="18" fill="#ffffff"/>
+              <path d="M 52 60 L 57 67 L 70 50" stroke="#0066CC" strokeWidth="4.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
             <div className="brand-text">
               <div className="brand-name">Alignment</div>
               <div className="brand-name">Automations</div>
@@ -1848,6 +2855,13 @@ export default function App() {
             <button className={"nav-item" + (page === "followup" ? " active" : "")} onClick={() => setPage("followup")}>
               <span className="nav-icon"><Ic.Followup /></span>Follow-ups
               {activeFuTotal > 0 && <span className="nav-badge">{activeFuTotal}</span>}
+            </button>
+            <div className="nav-section-label" style={{ marginTop:8 }}>Sales</div>
+            <button className={"nav-item" + (page === "prospecting" ? " active" : "")} onClick={() => setPage("prospecting")}>
+              <span className="nav-icon"><Ic.Search /></span>Prospecting
+            </button>
+            <button className={"nav-item" + (page === "playbook" ? " active" : "")} onClick={() => setPage("playbook")}>
+              <span className="nav-icon"><Ic.Book /></span>Playbook
             </button>
             <button className="logout-btn" style={{ marginTop:"auto" }} onClick={handleLogout}>
               <Ic.Logout /> Sign out
@@ -1877,14 +2891,18 @@ export default function App() {
               onSelectClinic={c => setSelected(c)}
             />
           )}
+          {page === "prospecting" && <ProspectingView onToast={showToast} />}
+          {page === "playbook" && <PlaybookView />}
         </main>
 
         {/* ── Mobile bottom nav ── */}
         <nav className="bottom-nav">
           <div className="bottom-nav-inner">
-            <button className={"bottom-nav-item" + (page === "dashboard" ? " active" : "")} onClick={() => setPage("dashboard")}><Ic.Dashboard /><span>Clinics</span></button>
+            <button className={"bottom-nav-item" + (page === "dashboard" ? " active" : "")} onClick={() => setPage("dashboard")}><Ic.Dashboard /><span>Businesses</span></button>
             <button className={"bottom-nav-item" + (page === "pipeline"  ? " active" : "")} onClick={() => setPage("pipeline")} ><Ic.Pipeline /><span>Pipeline</span></button>
             <button className={"bottom-nav-item" + (page === "followup"  ? " active" : "")} onClick={() => setPage("followup")} ><Ic.Followup /><span>Follow-ups</span></button>
+            <button className={"bottom-nav-item" + (page === "prospecting" ? " active" : "")} onClick={() => setPage("prospecting")} ><Ic.Search /><span>Prospecting</span></button>
+            <button className={"bottom-nav-item" + (page === "playbook"  ? " active" : "")} onClick={() => setPage("playbook")} ><Ic.Book /><span>Playbook</span></button>
             <button className="bottom-nav-item" onClick={handleLogout}><Ic.Logout /><span>Sign out</span></button>
           </div>
         </nav>

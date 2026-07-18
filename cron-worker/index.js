@@ -9,59 +9,90 @@ function delayMs(delay, unit) {
 
 function applyTemplate(text, clinic) {
   if (!text) return text;
-  const firstName = (clinic.contact_name || '').split(' ')[0] || '';
+  const firstName = (clinic.contact_name || '').split(' ')[0] || 'there';
   const lastName  = (clinic.contact_name || '').split(' ').slice(1).join(' ') || '';
   return text
     .replace(/\{\{first_name\}\}/gi, firstName)
     .replace(/\{\{last_name\}\}/gi, lastName)
     .replace(/\{\{clinic_name\}\}/gi, clinic.name || '')
+    .replace(/\{\{business_name\}\}/gi, clinic.name || '')
     .replace(/\{\{email\}\}/gi, clinic.contact_email || '')
     .replace(/\{\{phone\}\}/gi, clinic.contact_phone || '');
 }
 
-async function sendEmail(to, subject, body, env) {
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: env.FROM_EMAIL,
-      to: [to],
-      subject: subject || '(no subject)',
-      text: body || '',
-    }),
-  });
-  if (!res.ok) throw new Error(`Resend: ${await res.text()}`);
+// Converts the plain-text template body into the branded HTML shell.
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function textToHtml(text) {
+  let out = escapeHtml(text || '');
+  out = out.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" style="color:#0066CC;text-decoration:underline;">$1</a>');
+  return out.replace(/\n/g, '<br>');
+}
+function wrapEmailHtml(bodyText) {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
+  </head>
+  <body style="margin:0;padding:0;background:#F4F7FB;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F7FB;padding:32px 16px;">
+      <tr><td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#FFFFFF;border:1px solid #E2E9F1;border-radius:14px;overflow:hidden;">
+          <tr><td style="padding:22px 28px;border-bottom:1px solid #E2E9F1;">
+            <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+              <td style="width:56px;height:56px;background-image:url('https://app.alignmentautomations.com/logo-email.png?v=6');background-size:52px 52px;background-repeat:no-repeat;background-position:center;text-align:center;"></td>
+              <td style="padding-left:12px;font-family:Arial,sans-serif;font-size:16px;">
+                <span style="font-weight:700;color:#1A1A1A;">Alignment</span><span style="font-weight:400;color:#0066CC;"> Automations</span>
+              </td>
+            </tr></table>
+          </td></tr>
+          <tr><td style="padding:28px;font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#242A2E;">
+            ${textToHtml(bodyText)}
+          </td></tr>
+          <tr><td style="padding:16px 28px;border-top:1px solid #E2E9F1;font-family:Arial,sans-serif;font-size:12px;color:#8A929C;">
+            Alignment Automations &middot; alignment.automations@gmail.com
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`;
 }
 
-async function sendSms(to, body, env) {
-  const digits = to.replace(/\D/g, '');
-  const toNumber = digits.startsWith('1') ? `+${digits}` : `+1${digits}`;
-  const creds = btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`);
-  const res = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${creds}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        From: env.TWILIO_FROM_NUMBER,
-        To: toNumber,
-        Body: body || '',
-      }).toString(),
-    }
-  );
-  if (!res.ok) throw new Error(`Twilio: ${await res.text()}`);
+// Sends through the Google Apps Script relay (google-apps-script/mail-relay.gs),
+// which calls GmailApp.sendEmail from alignment.automations@gmail.com — this
+// makes Gmail recognize the sender as a real Google Account and show its
+// profile photo as the avatar to recipients viewing in Gmail.
+async function sendEmail(to, subject, body, env) {
+  if (!env.APPSSCRIPT_URL)    throw new Error('APPSSCRIPT_URL is not set');
+  if (!env.APPSSCRIPT_SECRET) throw new Error('APPSSCRIPT_SECRET is not set');
+  const res = await fetch(env.APPSSCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      secret: env.APPSSCRIPT_SECRET,
+      to,
+      from: env.FROM_EMAIL,
+      subject: subject || '(no subject)',
+      text: body || '',
+      html: wrapEmailHtml(body || ''),
+    }),
+  });
+  const raw = await res.text();
+  let json = null;
+  try { json = JSON.parse(raw); } catch (_) {}
+  if (!res.ok || !json?.ok) {
+    throw new Error(`Apps Script relay rejected send (HTTP ${res.status}): ${raw}`);
+  }
+  return json;
 }
 
 export default {
   async scheduled(event, env, ctx) {
     const { results: clinics } = await env.DB.prepare(
-      'SELECT id, name, contact_name, contact_email, contact_phone, follow_ups, sms_consent, sms_opted_out FROM clinics'
+      'SELECT id, name, contact_name, contact_email, contact_phone, follow_ups FROM clinics'
     ).all();
 
     for (const clinic of clinics) {
@@ -81,20 +112,13 @@ export default {
           if (Date.now() < prevSentAt + delayMs(step.delay, step.delayUnit)) break;
 
           try {
-            if (step.channel === 'email') {
-              if (!clinic.contact_email) throw new Error('no email on file');
-              await sendEmail(
-                clinic.contact_email,
-                applyTemplate(step.subject, clinic),
-                applyTemplate(step.body, clinic),
-                env
-              );
-            } else {
-              if (!clinic.contact_phone) throw new Error('no phone on file');
-              if (!clinic.sms_consent)   throw new Error('no SMS consent on file');
-              if (clinic.sms_opted_out)  throw new Error('contact has opted out');
-              await sendSms(clinic.contact_phone, applyTemplate(step.body, clinic), env);
-            }
+            if (!clinic.contact_email) throw new Error('no email on file');
+            await sendEmail(
+              clinic.contact_email,
+              applyTemplate(step.subject, clinic),
+              applyTemplate(step.body, clinic),
+              env
+            );
             fu.steps[i] = { ...step, status: 'sent', sentAt: Date.now() };
             fu.currentStep = i + 1;
           } catch (err) {

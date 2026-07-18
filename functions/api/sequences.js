@@ -20,8 +20,12 @@ export async function onRequestGet({ env }) {
 export async function onRequestPut({ request, env }) {
   try {
     const sequences = await request.json();
+    // Upsert: insert the row if it doesn't exist yet, otherwise update it.
+    // (A bare UPDATE silently no-ops on a fresh DB, losing the save.)
     await env.DB.prepare(
-      "UPDATE sequences SET data = ?, updated_at = datetime('now') WHERE id = 'all'"
+      `INSERT INTO sequences (id, data, updated_at)
+       VALUES ('all', ?, datetime('now'))
+       ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`
     ).bind(JSON.stringify(sequences)).run();
     return new Response(JSON.stringify({ ok: true }), {
       headers: { 'Content-Type': 'application/json' },
