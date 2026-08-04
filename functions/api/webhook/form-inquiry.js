@@ -137,15 +137,19 @@ export async function onRequestPost({ request, env }) {
       ) VALUES (?, ?, ?, ?, ?, ?, 'lead', '[]', '[]', '[]', datetime('now'))
     `).bind(clinicId, name, contactName, email || null, phone || null, pkg || null).run();
 
-    // Find the active Website Inquiry sequence
+    // Route to a package-specific sequence where one exists; everything else
+    // falls into the generic website inquiry trigger.
+    const PACKAGE_TRIGGERS = { 'Calculator Lead Magnet': 'calculator_lead' };
+    const triggerKey = PACKAGE_TRIGGERS[pkg] || 'website_inquiry';
+
     const { results: seqRows } = await env.DB.prepare(
       "SELECT data FROM sequences WHERE id = 'all'"
     ).all();
     const sequences = seqRows[0]?.data ? JSON.parse(seqRows[0].data) : [];
-    const seq = sequences.find(s => s.trigger === 'website_inquiry' && s.active);
+    const seq = sequences.find(s => s.trigger === triggerKey && s.active);
 
     if (!seq) {
-      return json({ ok: true, clinicId, note: 'No active website_inquiry sequence found' });
+      return json({ ok: true, clinicId, note: `No active ${triggerKey} sequence found` });
     }
 
     const templateVars = { first_name, last_name, clinic_name: name, business_name: name, email, phone };
@@ -155,7 +159,7 @@ export async function onRequestPost({ request, env }) {
       id: uid(),
       seqId: seq.id,
       seqName: seq.name,
-      trigger: 'website_inquiry',
+      trigger: triggerKey,
       triggeredAt: now,
       status: 'active',
       currentStep: 0,
