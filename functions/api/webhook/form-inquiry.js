@@ -1,10 +1,38 @@
 // Cloudflare Pages Function: /functions/api/webhook/form-inquiry.js
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, x-webhook-secret',
-};
+// Public form endpoint. It is called from the marketing site's forms, which run
+// in the visitor's browser — so there is no such thing as a secret it can carry.
+// (It used to check an `x-webhook-secret` header that was hardcoded in the page
+// source, which meant anyone could read it and use this endpoint as an open
+// email relay.) Protection is now: an origin allowlist, a honeypot field, a
+// per-IP rate limit, and a global daily ceiling on outbound email.
+const ALLOWED_ORIGINS = [
+  'https://alignmentautomations.com',
+  'https://www.alignmentautomations.com',
+  'http://localhost:5173',   // vite dev
+  'http://localhost:8788',   // wrangler pages dev
+];
+
+const PER_IP_HOURLY_LIMIT     = 5;    // submissions per IP per hour
+const GLOBAL_DAILY_EMAIL_CAP  = 50;   // auto-replies sent per day, across all IPs
+const MAX_FIELD_LENGTH        = 2000; // per text field
+
+function corsHeaders(origin) {
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    // x-webhook-secret is still *tolerated* so that deploying this function
+    // doesn't break the currently-live pages, which still send it. It is no
+    // longer checked or required, and the pages stop sending it once the site
+    // redeploys. Safe to drop from this list after that.
+    'Access-Control-Allow-Headers': 'Content-Type, x-webhook-secret',
+    'Vary': 'Origin',
+  };
+}
+
+function isAllowedOrigin(origin) {
+  return Boolean(origin) && ALLOWED_ORIGINS.includes(origin);
+}
 
 function uid() {
   return crypto.randomUUID();
@@ -100,24 +128,79 @@ async function sendEmail(to, subject, body, env) {
 }
 
 // Handle CORS preflight
-export async function onRequestOptions() {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
+export async function onRequestOptions({ request }) {
+  const origin = request.headers.get('Origin');
+  if (!isAllowedOrigin(origin)) {
+    return new Response(null, { status: 403 });
+  }
+  return new Response(null, { status: 204, headers: corsHeaders(origin) });
+}
+
+// Counts recent submissions for this IP, and auto-replies sent site-wide today.
+async function getRecentCounts(env, ip) {
+  const [ipRow, emailRow] = await Promise.all([
+    env.DB.prepare(
+      "SELECT COUNT(*) AS c FROM form_submissions WHERE ip = ? AND created_at > datetime('now','-1 hour')"
+    ).bind(ip).first(),
+    env.DB.prepare(
+      "SELECT COUNT(*) AS c FROM form_submissions WHERE emailed = 1 AND created_at > datetime('now','-1 day')"
+    ).first(),
+  ]);
+  return { ipCount: ipRow?.c ?? 0, emailedToday: emailRow?.c ?? 0 };
 }
 
 export async function onRequestPost({ request, env }) {
+  const origin = request.headers.get('Origin');
+  const headers = isAllowedOrigin(origin) ? corsHeaders(origin) : {};
+
   const json = (data, status = 200) =>
     new Response(JSON.stringify(data), {
       status,
-      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+      headers: { 'Content-Type': 'application/json', ...headers },
     });
 
+  if (!isAllowedOrigin(origin)) {
+    return json({ error: 'Forbidden' }, 403);
+  }
+
   try {
-    const authHeader = request.headers.get('x-webhook-secret');
-    if (authHeader !== env.WEBHOOK_SECRET) {
-      return json({ error: 'Unauthorized' }, 401);
+    const body = await request.json();
+
+    // Honeypot: a field hidden off-screen that no human ever sees. If it came
+    // back filled, it was a bot — return a normal-looking success and drop it.
+    if (typeof body.fax_number === 'string' && body.fax_number.trim() !== '') {
+      return json({ ok: true }, 201);
     }
 
-    const body = await request.json();
+    // Reject oversized payloads before anything touches the database.
+    for (const [key, value] of Object.entries(body)) {
+      if (typeof value === 'string' && value.length > MAX_FIELD_LENGTH) {
+        return json({ error: `${key} is too long` }, 413);
+      }
+    }
+
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const { ipCount, emailedToday } = await getRecentCounts(env, ip);
+
+    if (ipCount >= PER_IP_HOURLY_LIMIT) {
+      return json({ error: 'Too many submissions. Please try again later.' }, 429);
+    }
+
+    // Record the attempt now, so everything that gets this far counts toward the
+    // limit — including submissions that fail validation below.
+    const submissionId = uid();
+    await env.DB.prepare(
+      'INSERT INTO form_submissions (id, ip, created_at, emailed) VALUES (?, ?, datetime(\'now\'), 0)'
+    ).bind(submissionId, ip).run();
+
+    // Occasional cleanup so the table doesn't grow forever. The counts above only
+    // ever look back 24 hours, so anything older than a week is dead weight.
+    if (Math.random() < 0.05) {
+      await env.DB.prepare(
+        "DELETE FROM form_submissions WHERE created_at < datetime('now','-7 days')"
+      ).run();
+    }
+
     // Accept business_name (current) or clinic_name (legacy) from the inbound form.
     const { first_name, last_name, email, phone, package: pkg } = body;
     const businessName = body.business_name || body.clinic_name;
@@ -170,13 +253,28 @@ export async function onRequestPost({ request, env }) {
     // Always send step 0 immediately for form submissions — real-time response is critical
     const step0 = fu.steps[0];
     if (step0) {
-      try {
-        if (!email) throw new Error('no email on file');
-        await sendEmail(email, applyTemplate(step0.subject, templateVars), applyTemplate(step0.body, templateVars), env);
-        fu.steps[0] = { ...step0, status: 'sent', sentAt: Date.now() };
-        fu.currentStep = 1;
-      } catch (err) {
-        fu.steps[0] = { ...step0, status: 'failed', sentAt: Date.now(), error: err.message };
+      if (emailedToday >= GLOBAL_DAILY_EMAIL_CAP) {
+        // Ceiling hit. The lead is still saved and still visible in the CRM —
+        // we just don't auto-reply, so a flood can't burn the sending account.
+        // Anything held this way needs a manual reply.
+        fu.steps[0] = {
+          ...step0,
+          status: 'held',
+          sentAt: null,
+          error: `Daily auto-reply cap of ${GLOBAL_DAILY_EMAIL_CAP} reached — send this one by hand.`,
+        };
+      } else {
+        try {
+          if (!email) throw new Error('no email on file');
+          await sendEmail(email, applyTemplate(step0.subject, templateVars), applyTemplate(step0.body, templateVars), env);
+          fu.steps[0] = { ...step0, status: 'sent', sentAt: Date.now() };
+          fu.currentStep = 1;
+          await env.DB.prepare(
+            'UPDATE form_submissions SET emailed = 1 WHERE id = ?'
+          ).bind(submissionId).run();
+        } catch (err) {
+          fu.steps[0] = { ...step0, status: 'failed', sentAt: Date.now(), error: err.message };
+        }
       }
     }
 

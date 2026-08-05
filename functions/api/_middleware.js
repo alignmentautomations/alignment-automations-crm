@@ -3,8 +3,10 @@
 // validates it against the APP_SECRET environment variable.
 //
 // Exceptions:
-//   - /api/webhook/*  authenticate themselves with their own WEBHOOK_SECRET and are
-//     called by external services that don't know the app password.
+//   - /api/webhook/*  are public endpoints called from the marketing site's forms,
+//     which run in the visitor's browser and so can't hold a secret. They guard
+//     themselves instead — origin allowlist, honeypot, per-IP rate limit, and a
+//     daily ceiling on outbound email. See functions/api/webhook/form-inquiry.js.
 //   - OPTIONS (CORS preflight) is always allowed.
 
 export async function onRequest(context) {
