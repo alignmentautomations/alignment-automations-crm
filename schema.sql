@@ -23,6 +23,16 @@ CREATE TABLE IF NOT EXISTS clinics (
   priority  TEXT,   -- hot | warm | cold
   lead_note TEXT,   -- the "leak/angle" to show on camera
 
+  -- Outreach tracker (carried over from a prospect on push; edited in the
+  -- business's Outreach tab). See migrate_outreach.sql.
+  channel        TEXT,
+  leak_flagged   TEXT,
+  date_sent      TEXT,
+  watched        INTEGER DEFAULT 0,
+  replied        INTEGER DEFAULT 0,
+  next_follow_up TEXT,
+  outreach_stage TEXT DEFAULT 'New',
+
   -- Legacy SMS columns (kept for compatibility; the app is email-only).
   sms_consent      INTEGER  DEFAULT 0,
   sms_consent_at   DATETIME DEFAULT NULL,
@@ -67,6 +77,7 @@ CREATE TABLE IF NOT EXISTS prospects (
   review_count INTEGER,
   business_status TEXT,
   google_maps_url TEXT,
+  gbp_status TEXT,                      -- "Complete" | "Incomplete" | "Unclaimed / bare" — see migrate_gbp_status.sql
 
   website_check TEXT DEFAULT '{}',      -- JSON: {attempted, reachable, statusCode, loadTimeMs,
                                          --   mobileFriendly, agencyDetected, builderPlatform, email,

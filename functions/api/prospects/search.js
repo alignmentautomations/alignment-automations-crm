@@ -12,6 +12,7 @@ import {
   searchContractors,
   checkWebsite,
   deriveAutoSignals,
+  deriveGbpStatus,
   computeScore,
   tierFor,
   runWithConcurrency,
@@ -19,6 +20,12 @@ import {
 
 const MAX_RESULTS_PER_SEARCH = 10;
 const CONCURRENCY = 4;
+
+// Google's review count is a strong proxy for "already an established,
+// thriving business" — these don't need a lead-gen fix and just crowd out
+// the smaller/newer businesses the playbook is actually targeting. Filtered
+// out before the website check to also save a subrequest per skip.
+const ESTABLISHED_REVIEW_THRESHOLD = 40;
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -34,12 +41,24 @@ export async function onRequestPost({ request, env }) {
       });
     }
 
-    const results = await searchContractors({ trade, location, apiKey: env.GOOGLE_PLACES_API_KEY });
+    // Defensive trim: a trailing newline/whitespace on the secret (easy to
+    // introduce when pasting into a `wrangler pages secret put` prompt)
+    // makes Google's edge bounce the request with an empty 400 body, which
+    // looks nothing like its usual structured "API key not valid" error —
+    // hard to diagnose without this.
+    const apiKey = (env.GOOGLE_PLACES_API_KEY || "").trim();
+    const rawResults = await searchContractors({ trade, location, apiKey });
+    const results = rawResults.filter((r) => (r.reviewCount || 0) < ESTABLISHED_REVIEW_THRESHOLD);
+    const establishedSkipped = rawResults.length - results.length;
 
-    const { results: existingRows } = await env.DB.prepare("SELECT place_id FROM prospects").all();
-    const existingIds = new Set(existingRows.map((r) => r.place_id));
+    // The prospect list is a per-search scratchpad, not an archive: each search
+    // replaces the previous list entirely. Anything worth keeping gets pushed
+    // to the pipeline (clinics table) before the next search.
+    await env.DB.prepare("DELETE FROM prospects").run();
 
-    const newResults = results.filter((r) => !existingIds.has(r.placeId)).slice(0, MAX_RESULTS_PER_SEARCH);
+    const newResults = results.slice(0, MAX_RESULTS_PER_SEARCH);
+    // With the table cleared, "skipped" now means matches beyond the per-search
+    // cap, not duplicates.
     const skipped = results.length - newResults.length;
 
     const prospects = await runWithConcurrency(newResults, CONCURRENCY, async (result) => {
@@ -49,6 +68,7 @@ export async function onRequestPost({ request, env }) {
       const signals = { ...auto, runsAds: false, growthIntent: false, ownerOperated: false };
       const score = computeScore(signals);
       const tier = tierFor(score).label;
+      const gbpStatus = deriveGbpStatus({ hasHours: result.hasHours, photoCount: result.photoCount });
 
       return {
         id: crypto.randomUUID(),
@@ -64,6 +84,7 @@ export async function onRequestPost({ request, env }) {
         reviewCount: result.reviewCount,
         businessStatus: result.businessStatus,
         googleMapsUrl: result.googleMapsUrl,
+        gbpStatus,
         websiteCheck,
         score,
         tier,
@@ -74,13 +95,13 @@ export async function onRequestPost({ request, env }) {
       const stmt = env.DB.prepare(`
         INSERT INTO prospects (
           id, place_id, business_name, trade, search_location, address, phone, email,
-          website, rating, review_count, business_status, google_maps_url,
+          website, rating, review_count, business_status, google_maps_url, gbp_status,
           website_check, manual_signals, score, tier, outreach_stage
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       `);
       const batch = prospects.map((p) => stmt.bind(
         p.id, p.placeId, p.businessName, p.trade, p.searchLocation, p.address, p.phone, p.email,
-        p.website, p.rating, p.reviewCount, p.businessStatus, p.googleMapsUrl,
+        p.website, p.rating, p.reviewCount, p.businessStatus, p.googleMapsUrl, p.gbpStatus,
         JSON.stringify(p.websiteCheck),
         JSON.stringify({ runsAds: false, growthIntent: false, ownerOperated: false }),
         p.score, p.tier, "New"
@@ -92,7 +113,7 @@ export async function onRequestPost({ request, env }) {
     // result (homepage + 1 contact-page fallback if no email found on it).
     const subrequestsApprox = 1 + prospects.length * 2;
 
-    return new Response(JSON.stringify({ added: prospects.length, skipped, subrequestsApprox }), {
+    return new Response(JSON.stringify({ added: prospects.length, skipped, establishedSkipped, subrequestsApprox }), {
       status: 200, headers: { "Content-Type": "application/json" },
     });
   } catch (err) {

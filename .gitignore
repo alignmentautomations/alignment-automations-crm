@@ -12,6 +12,8 @@ dist
 dist-ssr
 *.local
 .dev.vars
+docs/prospects-backup-*.json
+.wrangler/
 
 # Editor directories and files
 .vscode/*

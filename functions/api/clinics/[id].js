@@ -120,6 +120,13 @@ export async function onRequestPatch({ params, request, env }) {
     if (patch.source        !== undefined) { updates.push('source = ?');          values.push(patch.source); }
     if (patch.priority      !== undefined) { updates.push('priority = ?');        values.push(patch.priority); }
     if (patch.lead_note     !== undefined) { updates.push('lead_note = ?');       values.push(patch.lead_note); }
+    if (patch.channel        !== undefined) { updates.push('channel = ?');         values.push(patch.channel); }
+    if (patch.leak_flagged   !== undefined) { updates.push('leak_flagged = ?');    values.push(patch.leak_flagged); }
+    if (patch.date_sent      !== undefined) { updates.push('date_sent = ?');       values.push(patch.date_sent); }
+    if (patch.next_follow_up !== undefined) { updates.push('next_follow_up = ?');  values.push(patch.next_follow_up); }
+    if (patch.watched        !== undefined) { updates.push('watched = ?');         values.push(patch.watched ? 1 : 0); }
+    if (patch.replied        !== undefined) { updates.push('replied = ?');         values.push(patch.replied ? 1 : 0); }
+    if (patch.outreach_stage !== undefined) { updates.push('outreach_stage = ?');  values.push(patch.outreach_stage); }
     if (patch.alignmentTasks !== undefined) { updates.push('alignment_tasks = ?'); values.push(JSON.stringify(patch.alignmentTasks)); }
     if (patch.clinicTasks   !== undefined) { updates.push('clinic_tasks = ?');    values.push(JSON.stringify(patch.clinicTasks)); }
     if (patch.followUps     !== undefined) { updates.push('follow_ups = ?');      values.push(JSON.stringify(patch.followUps)); }

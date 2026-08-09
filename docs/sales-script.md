@@ -51,6 +51,9 @@ This shifts it from "do I need marketing?" to "I'm already losing money I could 
 Then the kicker — the differentiator:
 > "And the part that matters most for you: **you don't touch any of it.** No logins, no dashboards, no accounts to manage. I set it all up, I run it, I keep it working. You just keep doing the work and showing up to the estimates that land on your calendar."
 
+Worth checking on the call — most contractors have never looked:
+> "Quick question — when's the last time you checked your Google Business listing? A lot of guys either don't have one set up right, or it's missing hours, photos, service area — stuff that actually loses you calls. That's part of what I fix too, whether it's already up or we're setting it up from scratch."
+
 *(If helpful, walk them through the live demo flow on how-it-works so they can see it.)*
 
 ---

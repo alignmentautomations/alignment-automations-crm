@@ -34,15 +34,19 @@ export async function onRequestPost({ params, env }) {
         id, name, contact_name, contact_email, contact_phone,
         website, package, status, start_date,
         alignment_tasks, clinic_tasks, follow_ups,
-        industry, source, priority, lead_note, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        industry, source, priority, lead_note,
+        channel, leak_flagged, date_sent, next_follow_up, watched, replied, outreach_stage,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     `).bind(
       clinic.id, clinic.name,
       null, clinic.contact_email || null, clinic.contact_phone || null,
       clinic.website || null, null, clinic.status,
       null,
       JSON.stringify([]), JSON.stringify([]), JSON.stringify([]),
-      clinic.industry, clinic.source, clinic.priority, clinic.lead_note
+      clinic.industry, clinic.source, clinic.priority, clinic.lead_note,
+      clinic.channel, clinic.leak_flagged, clinic.date_sent, clinic.next_follow_up,
+      clinic.watched, clinic.replied, clinic.outreach_stage
     ).run();
 
     const pushedAt = new Date().toISOString();

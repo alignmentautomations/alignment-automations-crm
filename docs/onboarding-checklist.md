@@ -24,11 +24,14 @@ Send the client ONE intake form to collect all of this:
 - [ ] (Client) Where leads go (their cell # / email for instant notifications)
 - [ ] (Client) Calendar to sync (Google or Outlook) + availability rules, estimate duration, travel buffer
 - [ ] (Client) Existing website? Domain owner + registrar login (or authorization to register new)
+- [ ] (Client) Existing Google Business Profile? Access/ownership transfer (or confirm none exists)
 - [ ] (Client) Business email address for sending follow-ups
 - [ ] (You) Kickoff confirmation sent: timeline, what's needed, what's next
 
 ## Phase 2 — Accounts & Infrastructure (Day 1–2, on accounts you manage)
 - [ ] (You) Domain registered or access delegated; DNS configured
+- [ ] (You) Google Business Profile claimed & verified — or created new if none exists
+- [ ] (You) GBP corrected: categories, service area, hours, phone, website link, photos uploaded
 - [ ] (You) Hosting set up (Cloudflare / GitHub Pages)
 - [ ] (You) Email deliverability: **SPF, DKIM, DMARC** records (so follow-ups don't hit spam)
 - [ ] (You) SMS/telephony provider set up for missed-call text-back

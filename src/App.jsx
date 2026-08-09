@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { PLAYBOOK_CSS, PLAYBOOK_HTML } from "./playbookContent";
+import { VISUAL_AUDIT_CSS, VISUAL_AUDIT_HTML } from "./visualAuditPlaybookContent";
 
 // ─── Pipeline ──────────────────────────────────────────────────────────────────────────────────
 
@@ -191,6 +192,25 @@ const PROSPECT_TRADES = [
   { value: "landscaper", label: "Landscaper / lawn care" },
 ];
 
+// Forces an unambiguous "City, ST" query to the Places API — a bare city name
+// or a 2-letter fragment (e.g. "sa") can resolve to a same-named place in a
+// different country (see prospects with search_location="sa" that matched
+// South Africa instead of San Antonio, TX). Requiring a real state selection
+// makes that class of mismatch structurally impossible.
+const US_STATES = [
+  ["AL","Alabama"],["AK","Alaska"],["AZ","Arizona"],["AR","Arkansas"],["CA","California"],
+  ["CO","Colorado"],["CT","Connecticut"],["DE","Delaware"],["FL","Florida"],["GA","Georgia"],
+  ["HI","Hawaii"],["ID","Idaho"],["IL","Illinois"],["IN","Indiana"],["IA","Iowa"],
+  ["KS","Kansas"],["KY","Kentucky"],["LA","Louisiana"],["ME","Maine"],["MD","Maryland"],
+  ["MA","Massachusetts"],["MI","Michigan"],["MN","Minnesota"],["MS","Mississippi"],["MO","Missouri"],
+  ["MT","Montana"],["NE","Nebraska"],["NV","Nevada"],["NH","New Hampshire"],["NJ","New Jersey"],
+  ["NM","New Mexico"],["NY","New York"],["NC","North Carolina"],["ND","North Dakota"],["OH","Ohio"],
+  ["OK","Oklahoma"],["OR","Oregon"],["PA","Pennsylvania"],["RI","Rhode Island"],["SC","South Carolina"],
+  ["SD","South Dakota"],["TN","Tennessee"],["TX","Texas"],["UT","Utah"],["VT","Vermont"],
+  ["VA","Virginia"],["WA","Washington"],["WV","West Virginia"],["WI","Wisconsin"],["WY","Wyoming"],
+  ["DC","District of Columbia"],
+];
+
 function tierColor(tier) {
   if (tier === "Record today") return "#ef4444";
   if (tier === "Warm") return "#f59e0b";
@@ -222,24 +242,25 @@ const DEFAULT_SEQUENCES = [
       subject:"Still interested?",
       body:"Hi {{first_name}},\n\nOne last check-in. If timing isn't right or you have questions, just reply — happy to help.\n\nhttps://calendly.com/alignment-automations/new-meeting\n\n— Matthew\nAlignment Automations" },
   ]},
-  // Launch manually after you send the first personalized outreach video (Day 0).
+  // Launch manually after you send the first personalized outreach (Day 0) —
+  // a video or a visual audit (marked-up screenshot), whichever you used.
   // Cadence matches the playbook's 30-day follow-up exactly: day 3, 7, 14, 21, 30.
   { id:"seq_1", name:"Prospect Follow-up (Day 3–30)", trigger:"prospect_outreach", active:true, steps:[
     { id:"s1", delay:3, delayUnit:"days", channel:"email",
-      subject:"Quick follow-up",
-      body:"Hi {{first_name}},\n\nJust making sure my note about {{business_name}} came through — no worries if now's not the time.\n\nIf it's useful, happy to grab 15 minutes:\nhttps://calendly.com/alignment-automations/new-meeting\n\n— Matthew\nAlignment Automations" },
+      subject:"Did that come through?",
+      body:"Hey {{first_name}},\n\nJust circling back on what I sent over — wanted to make sure it didn't get buried in the inbox.\n\nNo pressure at all. If any of it looked useful, just hit reply and let me know — happy to walk you through it.\n\n— Matthew\nAlignment Automations" },
     { id:"s2", delay:4, delayUnit:"days", channel:"email",
-      subject:"A quick example",
-      body:"Hi {{first_name}},\n\nCurious what you thought of the video. Here's a quick example of this working for a business just like {{business_name}} — happy to walk through it live if that's easier:\nhttps://calendly.com/alignment-automations/new-meeting\n\n— Matthew\nAlignment Automations" },
+      subject:"What this looked like for another contractor",
+      body:"Hey {{first_name}},\n\nFiguring the timing might just not be right, and that's fair.\n\nFigured I'd share a quick example instead. I set this up for another local contractor who kept losing calls after hours — now every missed call gets an instant text back, and he's booking a handful of extra jobs a month from leads that used to just disappear.\n\nIf you want to see how it'd work for {{business_name}}, just reply and I'll walk you through it.\n\n— Matthew\nAlignment Automations" },
     { id:"s3", delay:7, delayUnit:"days", channel:"email",
-      subject:"A different angle",
-      body:"Hi {{first_name}},\n\nDifferent thought on {{business_name}} — I think the bigger win might actually be somewhere else. Worth a quick look?\nhttps://calendly.com/alignment-automations/new-meeting\n\n— Matthew\nAlignment Automations" },
+      subject:"One quick thought",
+      body:"Hey {{first_name}},\n\nI'll keep this short — the biggest thing I see costing contractors work isn't the website, it's what happens when a lead comes in and nobody's free to grab the phone.\n\nThat's the piece I'd fix first for {{business_name}}. Couple weeks to set up, then it runs on its own.\n\nHappy to show you if you're curious — just reply and I'll send the details.\n\n— Matthew\nAlignment Automations" },
     { id:"s4", delay:7, delayUnit:"days", channel:"email",
-      subject:"How this looked for one HVAC shop",
-      body:"Hi {{first_name}},\n\nA two-tech HVAC shop I worked with was missing a dozen calls a week with no way to capture them. Six weeks after launch they were booking 8–10 extra jobs a month from leads that used to vanish.\n\n\"I had no idea how many calls I was losing until they stopped getting lost.\"\n\nIf {{business_name}} has a similar gap, happy to show you where:\nhttps://calendly.com/alignment-automations/new-meeting\n\n— Matthew\nAlignment Automations" },
+      subject:"Why I actually do this",
+      body:"Hey {{first_name}},\n\nQuick bit about me, since we haven't talked yet — I spent 15 years in the trades before this. So when I say most guys are leaving money on the table with missed calls and slow follow-up, it's because I lived it.\n\nThat's the whole reason I build these systems now. If it's ever worth a conversation for {{business_name}}, I'm here:\nhttps://calendly.com/alignment-automations/new-meeting\n\n— Matthew\nAlignment Automations" },
     { id:"s5", delay:9, delayUnit:"days", channel:"email",
-      subject:"Last note from me",
-      body:"Hi {{first_name}},\n\nI'll stop reaching out after this one — but if catching more leads for {{business_name}} is ever on your list, I'm one message away.\n\n— Matthew\nAlignment Automations" },
+      subject:"I'll leave you be",
+      body:"Hey {{first_name}},\n\nThis'll be my last one — don't want to be the guy clogging up your inbox.\n\nIf catching more of those leads ever moves up the list, you've got my email. Reach out anytime and we'll pick it right back up.\n\nAppreciate you either way.\n\n— Matthew\nAlignment Automations" },
   ]},
   // Auto-fires the moment a deal is marked Won or moved to Onboarding.
   { id:"seq_2", name:"Client Onboarding Kickoff", trigger:"client_won", active:true, steps:[
@@ -595,6 +616,14 @@ const css = `
     background: #161f32; border: 1px solid rgba(255,255,255,0.07);
     border-radius: 10px; overflow: hidden;
   }
+  /* Prospecting's table has no separate mobile card-list view (unlike the
+     Dashboard/clinic-card-list pattern), so it can't use .table-wrap — that
+     class is hidden outright on mobile below. Scroll horizontally instead. */
+  .prospecting-table-wrap {
+    background: #161f32; border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  .prospecting-table-wrap table { min-width: 720px; }
   table { width: 100%; border-collapse: collapse; }
   thead {}
   th {
@@ -828,6 +857,28 @@ const css = `
   .info-label { font-size: 10px; color: #475569; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
   .info-value { font-size: 13px; color: #f8fafc; margin-top: 2px; font-weight: 500; word-break: break-word; }
 
+  /* ── Outreach tab ── */
+  .outreach-panel { display: flex; flex-direction: column; gap: 14px; }
+  .outreach-field { display: flex; flex-direction: column; gap: 6px; }
+  .outreach-field > span { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #475569; }
+  .outreach-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cbd5e1; cursor: pointer; }
+  .outreach-check input { width: 16px; height: 16px; accent-color: #2563eb; cursor: pointer; }
+
+  /* ── Playbook chooser ── */
+  .playbook-choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; max-width: 720px; }
+  .playbook-choice-card {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+    background: #161f32; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
+    padding: 22px; text-align: left; cursor: pointer; transition: border-color 0.15s, transform 0.15s;
+  }
+  .playbook-choice-card:hover { border-color: rgba(37,99,235,0.5); transform: translateY(-2px); }
+  .playbook-choice-icon {
+    width: 38px; height: 38px; border-radius: 9px; background: rgba(37,99,235,0.15);
+    color: #3b82f6; display: flex; align-items: center; justify-content: center;
+  }
+  .playbook-choice-title { font-size: 15px; font-weight: 700; color: #f8fafc; }
+  .playbook-choice-sub { font-size: 12px; color: #64748b; line-height: 1.5; }
+
   /* ── Tasks ── */
   .task-list { display: flex; flex-direction: column; gap: 6px; }
   .task-item {
@@ -908,8 +959,13 @@ const css = `
 
   /* ── Prospecting ── */
   .prospecting-search-bar { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; }
-  .prospecting-search-bar .form-select { min-width: 180px; }
-  .prospecting-search-bar .form-input { flex: 1; }
+  /* .form-select/.form-input both set width:100% as a base style, which becomes
+     each item's flex-basis in this row — without pinning the selects to a fixed
+     basis here, their huge (100%-of-container) basis dominates the shrink
+     calculation and squeezes the city input down to almost nothing. */
+  .prospecting-search-bar .form-select:first-child { flex: 0 0 180px; width: auto; }
+  .prospecting-search-bar .form-select:not(:first-child) { flex: 0 0 130px; width: auto; }
+  .prospecting-search-bar .form-input { flex: 1 1 0%; min-width: 120px; }
   .score-badge {
     display: inline-flex; align-items: center; justify-content: center;
     min-width: 26px; padding: 2px 8px; border-radius: 12px;
@@ -1343,7 +1399,7 @@ function ClinicPickerModal({ clinics, onSelect, onClose }) {
         </div>
         <div className="modal-body">
           <div style={{ display:"flex", flexDirection:"column", gap:8, maxHeight:360, overflowY:"auto" }}>
-            {clinics.length === 0 && <div style={{ color:"#475569", fontSize:13, textAlign:"center", padding:"24px 0" }}>No clinics yet. Add one first.</div>}
+            {clinics.length === 0 && <div style={{ color:"#475569", fontSize:13, textAlign:"center", padding:"24px 0" }}>No businesses yet. Add one first.</div>}
             {clinics.map(c => (
               <button key={c.id} onClick={() => onSelect(c)}
                 style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", background:"#0B1121", border:"1px solid rgba(255,255,255,0.08)", borderRadius:8, cursor:"pointer", textAlign:"left", transition:"border-color 0.15s", width:"100%" }}
@@ -1445,7 +1501,7 @@ function SequenceEditorModal({ seq, onSave, onClose }) {
 
 // ─── Detail Panel (3 tabs: Overview / Tasks / Follow-ups) ────────────────────
 
-function DetailPanel({ clinic, sequences, onClose, onUpdate, onOpenLaunch }) {
+function DetailPanel({ clinic, sequences, onClose, onUpdate, onPatch, onDelete, onOpenLaunch }) {
   const [tab, setTab] = useState("overview");
   const [newATask, setNewATask] = useState("");
   const [newCTask, setNewCTask] = useState("");
@@ -1507,6 +1563,7 @@ function DetailPanel({ clinic, sequences, onClose, onUpdate, onOpenLaunch }) {
         <div className="detail-tabs">
           {[
             ["overview", "Overview"],
+            ["outreach", "Outreach"],
             ["tasks",    "Tasks"],
             ["followups", `Follow-ups${activeFu.length > 0 ? ` (${activeFu.length})` : ""}`],
           ].map(([id, label]) => (
@@ -1527,9 +1584,14 @@ function DetailPanel({ clinic, sequences, onClose, onUpdate, onOpenLaunch }) {
                   <div><div className="info-label">Phone</div><div className="info-value" style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:12 }}>{clinic.contact_phone || "&#8212;"}</div></div>
                   <div><div className="info-label">Email</div><div className="info-value" style={{ fontSize:12 }}>{clinic.contact_email || "&#8212;"}</div></div>
                   <div><div className="info-label">Start Date</div><div className="info-value">{formatDate(clinic.start_date)}</div></div>
-                  {clinic.website && <div style={{ gridColumn:"span 2" }}><div className="info-label">Website</div><div className="info-value" style={{ fontSize:12 }}>{clinic.website}</div></div>}
+                  {clinic.website && <div style={{ gridColumn:"span 2" }}><div className="info-label">Website</div><div className="info-value" style={{ fontSize:12 }}><a href={/^https?:\/\//i.test(clinic.website) ? clinic.website : `https://${clinic.website}`} target="_blank" rel="noopener noreferrer" style={{ color:"#3b82f6" }}>{clinic.website}</a></div></div>}
                   {clinic.package && <div style={{ gridColumn:"span 2" }}><div className="info-label">Package</div><div className="info-value" style={{ color:"#3b82f6", fontWeight:700 }}>{clinic.package}</div></div>}
                 </div>
+                <a href={`https://www.google.com/search?q=${encodeURIComponent(clinic.name + " " + (clinic.contact_phone || ""))}`}
+                  target="_blank" rel="noopener noreferrer" className="btn-ghost"
+                  style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12, padding:"7px 12px", marginTop:12 }}>
+                  <Ic.Search /> Google Business Listing
+                </a>
               </div>
               {(clinic.industry || clinic.source || clinic.priority || clinic.lead_note) && (
                 <div>
@@ -1568,7 +1630,65 @@ function DetailPanel({ clinic, sequences, onClose, onUpdate, onOpenLaunch }) {
                   <><div className="task-progress-label">{pct}% complete</div><div className="task-progress"><div className="task-progress-bar" style={{ width: pct + "%" }} /></div></>
                 )}
               </div>
+              <div>
+                <div className="detail-section-title">Danger Zone</div>
+                <button className="btn-danger" style={{ padding:"7px 12px", fontSize:12 }}
+                  onClick={() => { if (window.confirm(`Remove ${clinic.name}? This can't be undone.`)) onDelete?.(clinic.id); }}>
+                  <Ic.Trash /> Remove Business
+                </button>
+              </div>
             </>
+          )}
+
+          {/* ── OUTREACH ── */}
+          {tab === "outreach" && (
+            <div className="outreach-panel">
+              <div className="detail-section-title">Outreach Tracker</div>
+              <label className="outreach-field">
+                <span>The leak you flagged</span>
+                <input className="form-input" type="text" defaultValue={clinic.leak_flagged || ""} key={"leak-" + clinic.id}
+                  placeholder="e.g. no mobile quote form, missed-call gap"
+                  onBlur={e => onPatch(clinic.id, { leak_flagged: e.target.value })} />
+              </label>
+              <div className="form-row">
+                <label className="outreach-field">
+                  <span>Channel</span>
+                  <select className="form-select" value={clinic.channel || ""} onChange={e => onPatch(clinic.id, { channel: e.target.value })}>
+                    <option value="">&#8212;</option>
+                    <option value="email">Email</option>
+                    <option value="messenger">Messenger</option>
+                    <option value="instagram">Instagram DM</option>
+                    <option value="nextdoor">Nextdoor</option>
+                    <option value="yelp">Yelp</option>
+                    <option value="call">Phone call</option>
+                  </select>
+                </label>
+                <label className="outreach-field">
+                  <span>Outreach stage</span>
+                  <select className="form-select" value={clinic.outreach_stage || "New"} onChange={e => onPatch(clinic.id, { outreach_stage: e.target.value })}>
+                    {OUTREACH_STAGES.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="form-row">
+                <label className="outreach-field">
+                  <span>Date sent</span>
+                  <input className="form-input" type="date" value={clinic.date_sent || ""} onChange={e => onPatch(clinic.id, { date_sent: e.target.value })} />
+                </label>
+                <label className="outreach-field">
+                  <span>Next follow-up</span>
+                  <input className="form-input" type="date" value={clinic.next_follow_up || ""} onChange={e => onPatch(clinic.id, { next_follow_up: e.target.value })} />
+                </label>
+              </div>
+              <div style={{ display:"flex", gap:18, marginTop:4 }}>
+                <label className="outreach-check">
+                  <input type="checkbox" checked={!!clinic.watched} onChange={e => onPatch(clinic.id, { watched: e.target.checked })} /> Watched
+                </label>
+                <label className="outreach-check">
+                  <input type="checkbox" checked={!!clinic.replied} onChange={e => onPatch(clinic.id, { replied: e.target.checked })} /> Replied
+                </label>
+              </div>
+            </div>
           )}
 
           {/* ── TASKS ── */}
@@ -1814,7 +1934,7 @@ function DashboardView({ clinics, sequences, onAdd, onEdit, onDelete, onSelect, 
               {filtered.length === 0 ? (
                 <tr><td colSpan={6}>
                   <div className="empty-state">
-                    <div className="empty-icon">&#127973;</div>
+                    <div className="empty-icon">&#129520;</div>
                     <div className="empty-title">{clinics.length === 0 ? "No businesses yet" : "No results"}</div>
                     <div className="empty-sub">{clinics.length === 0 ? "Click 'Add Business' to get started" : "Adjust search or filter"}</div>
                   </div>
@@ -1868,7 +1988,7 @@ function DashboardView({ clinics, sequences, onAdd, onEdit, onDelete, onSelect, 
         <div className="clinic-card-list">
           {filtered.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-icon">&#127973;</div>
+              <div className="empty-icon">&#129520;</div>
               <div className="empty-title">{clinics.length === 0 ? "No businesses yet" : "No results"}</div>
               <div className="empty-sub">{clinics.length === 0 ? "Tap + to add" : "Adjust search"}</div>
             </div>
@@ -1920,7 +2040,7 @@ function PipelineView({ clinics, sequences, onSelect, onStatusChange, onOpenLaun
                 <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8, paddingBottom:8, borderBottom:"1px solid rgba(255,255,255,0.07)" }}>
                   <span style={{ fontWeight:700, fontSize:13, color:"#f8fafc", letterSpacing:"0.02em" }}>{group.label}</span>
                   <span style={{ fontSize:11, color:"#475569" }}>{group.description}</span>
-                  <span style={{ marginLeft:"auto", fontSize:11, color:"#475569" }}>{groupTotal} clinic{groupTotal !== 1 ? "s" : ""}</span>
+                  <span style={{ marginLeft:"auto", fontSize:11, color:"#475569" }}>{groupTotal} business{groupTotal !== 1 ? "es" : ""}</span>
                 </div>
                 {groupStages.map(stage => {
                   const stageClinics = clinics.filter(c => c.status === stage.id);
@@ -2106,7 +2226,7 @@ function FollowupView({ clinics, sequences, setSequences, onOpenLaunch, onSelect
                           <span style={{ color:"#f8fafc", fontWeight:700, fontSize:13 }}>{seq.name}</span>
                           <span style={{ color:"#475569", fontSize:11, marginLeft:8 }}>{trig.label} &middot; {seq.steps.length} steps</span>
                         </div>
-                        <span style={{ color:"#475569", fontSize:11, fontFamily:"'JetBrains Mono',monospace" }}>{seqFu.length} clinic{seqFu.length > 1 ? "s" : ""}</span>
+                        <span style={{ color:"#475569", fontSize:11, fontFamily:"'JetBrains Mono',monospace" }}>{seqFu.length} business{seqFu.length > 1 ? "es" : ""}</span>
                       </div>
                       {/* Clinic rows */}
                       <table>
@@ -2311,19 +2431,46 @@ function SimpleLogin({ onLogin }) {
 
 // ─── Playbook View ────────────────────────────────────────────────────────────
 
+const PLAYBOOKS = {
+  video: {
+    title: "Video Outreach Playbook",
+    subtitle: "Video outreach system for finding & closing home-service clients",
+    blurb: "Personalized 60-second videos that call out the one leak on their site.",
+    icon: "Zap",
+    css: PLAYBOOK_CSS,
+    html: PLAYBOOK_HTML,
+    fullPageUrl: "/playbook.html",
+    storagePrefix: "aa_chk_video_",
+  },
+  visual: {
+    title: "Visual Audit Playbook",
+    subtitle: "Screenshot-and-markup outreach — no camera, no recording",
+    blurb: "A marked-up screenshot and a two-line caption, sent instead of a video.",
+    icon: "Search",
+    css: VISUAL_AUDIT_CSS,
+    html: VISUAL_AUDIT_HTML,
+    fullPageUrl: "/visual-audit-playbook.html",
+    storagePrefix: "aa_chk_visual_",
+  },
+};
+
 function PlaybookView() {
+  const [variant, setVariant] = useState(null); // null | "video" | "visual"
   const ref = useRef(null);
+  const active = variant ? PLAYBOOKS[variant] : null;
 
   // Re-wire the playbook's interactivity natively: persistent checklist + TOC scroll.
   useEffect(() => {
     const root = ref.current;
-    if (!root) return;
+    if (!root || !active) return;
 
     // Persistent daily checklist (mirrors the standalone doc's localStorage behavior).
+    // Keys are namespaced per playbook variant so the two documents' checklists
+    // don't share (or clobber) each other's checked state.
     const boxes = [...root.querySelectorAll(".chk")];
     const handlers = [];
     boxes.forEach((el, i) => {
-      const key = "aa_chk_" + i;
+      const key = active.storagePrefix + i;
       try { if (localStorage.getItem(key) === "1") el.classList.add("on"); } catch (_) {}
       const h = () => {
         el.classList.toggle("on");
@@ -2333,10 +2480,10 @@ function PlaybookView() {
       handlers.push([el, h]);
     });
 
-    const resetBtn = root.querySelector("#chk-reset");
+    const resetBtn = root.querySelector('[id^="chk-reset"]');
     const onReset = () => boxes.forEach((el, i) => {
       el.classList.remove("on");
-      try { localStorage.setItem("aa_chk_" + i, "0"); } catch (_) {}
+      try { localStorage.setItem(active.storagePrefix + i, "0"); } catch (_) {}
     });
     if (resetBtn) resetBtn.addEventListener("click", onReset);
 
@@ -2354,26 +2501,57 @@ function PlaybookView() {
       if (resetBtn) resetBtn.removeEventListener("click", onReset);
       anchors.forEach(a => a.removeEventListener("click", onAnchor));
     };
-  }, []);
+  }, [variant]);
+
+  if (!active) {
+    return (
+      <>
+        <div className="main-header">
+          <div>
+            <div className="page-title">Sales Playbook</div>
+            <div className="page-subtitle">Choose an outreach system</div>
+          </div>
+        </div>
+        <div className="main-content">
+          <div className="playbook-choice-grid">
+            {Object.entries(PLAYBOOKS).map(([key, pb]) => {
+              const Icon = Ic[pb.icon];
+              return (
+                <button key={key} className="playbook-choice-card" onClick={() => setVariant(key)}>
+                  <div className="playbook-choice-icon"><Icon /></div>
+                  <div className="playbook-choice-title">{pb.title}</div>
+                  <div className="playbook-choice-sub">{pb.blurb}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
-      <style>{PLAYBOOK_CSS}</style>
+      <style>{active.css}</style>
       <div className="main-header">
         <div>
-          <div className="page-title">Sales Playbook</div>
-          <div className="page-subtitle">Video outreach system for finding &amp; closing home-service clients</div>
+          <button className="btn-ghost" style={{ marginBottom:10, fontSize:12, padding:"6px 10px" }} onClick={() => setVariant(null)}>
+            <Ic.ArrowLeft /> All playbooks
+          </button>
+          <div className="page-title">{active.title}</div>
+          <div className="page-subtitle">{active.subtitle}</div>
         </div>
-        <a className="btn-ghost" href="/playbook.html" target="_blank" rel="noopener noreferrer" style={{ textDecoration:"none" }}>
+        <a className="btn-ghost" href={active.fullPageUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration:"none" }}>
           <Ic.ExternalLink /> Open full page
         </a>
       </div>
       <div className="main-content">
         <div
+          key={variant}
           ref={ref}
           className="pbdoc"
           data-theme="dark"
-          dangerouslySetInnerHTML={{ __html: PLAYBOOK_HTML }}
+          dangerouslySetInnerHTML={{ __html: active.html }}
         />
       </div>
     </>
@@ -2395,6 +2573,14 @@ function websiteCell(p) {
       {bits.length > 0 && <span className="no-site"> ({bits.join(", ")})</span>}
     </span>
   );
+}
+
+const GBP_STATUS_COLOR = { "Complete": "#10b981", "Incomplete": "#f59e0b", "Unclaimed / bare": "#ef4444" };
+
+function gbpCell(p) {
+  if (!p.gbp_status) return <span className="no-site">&#8212;</span>;
+  const color = GBP_STATUS_COLOR[p.gbp_status] || "#64748b";
+  return <span style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:12, color }}><span style={{ width:7, height:7, borderRadius:"50%", background:color, flexShrink:0 }} />{p.gbp_status}</span>;
 }
 
 const SOCIAL_LABELS = { facebook: "FB", instagram: "IG", twitter: "X", linkedin: "in" };
@@ -2452,13 +2638,14 @@ function ProspectRow({ p, expanded, onToggle, onUpdate, onDelete, onPush }) {
         <td>{p.business_name}</td>
         <td>{p.trade}</td>
         <td>{websiteCell(p)}</td>
+        <td>{gbpCell(p)}</td>
         <td>{p.phone}{p.phone && p.email && <br />}{p.email}</td>
         <td>{socialCell(p)}</td>
         <td>{p.outreach_stage}</td>
       </tr>
       {expanded && (
         <tr className="detail-row">
-          <td colSpan={8}>
+          <td colSpan={9}>
             <div className="detail-grid">
               <div className="detail-block">
                 <h4>Signals (auto)</h4>
@@ -2479,6 +2666,7 @@ function ProspectRow({ p, expanded, onToggle, onUpdate, onDelete, onPush }) {
                 <label>Email <input className="form-input" type="text" defaultValue={p.email || ""} placeholder="none found" onBlur={e => onUpdate(p.id, { email: e.target.value })} /></label>
                 <label>Phone <input className="form-input" type="text" defaultValue={p.phone || ""} onBlur={e => onUpdate(p.id, { phone: e.target.value })} /></label>
                 {p.google_maps_url && <a href={p.google_maps_url} target="_blank" rel="noopener noreferrer" className="maps-link">Open Google Maps listing</a>}
+                {p.gbp_status && <div style={{ marginTop:4 }}>{gbpCell(p)}</div>}
                 <div className="social-links" style={{ marginTop: 8 }}>
                   {Object.keys(SOCIAL_FULL_LABELS).filter(k => (p.website_check?.social || {})[k]).length === 0 ? (
                     <div style={{ fontSize: 12, color: "#475569" }}>No social profiles found on their site</div>
@@ -2492,34 +2680,13 @@ function ProspectRow({ p, expanded, onToggle, onUpdate, onDelete, onPush }) {
                 </div>
               </div>
               <div className="detail-block">
-                <h4>Outreach tracker</h4>
-                <label>Channel
-                  <select className="form-select" value={p.channel || ""} onChange={e => onUpdate(p.id, { channel: e.target.value })}>
-                    <option value="">&#8212;</option>
-                    <option value="email">Email</option>
-                    <option value="sms">SMS</option>
-                    <option value="messenger">Messenger</option>
-                    <option value="instagram">Instagram DM</option>
-                  </select>
-                </label>
-                <label>Leak flagged <input className="form-input" type="text" defaultValue={p.leak_flagged || ""} placeholder="e.g. no mobile quote form" onBlur={e => onUpdate(p.id, { leakFlagged: e.target.value })} /></label>
-                <label>Date sent <input className="form-input" type="date" defaultValue={p.date_sent || ""} onChange={e => onUpdate(p.id, { dateSent: e.target.value })} /></label>
-                <label>Next follow-up <input className="form-input" type="date" defaultValue={p.next_follow_up || ""} onChange={e => onUpdate(p.id, { nextFollowUp: e.target.value })} /></label>
-                <label><input type="checkbox" checked={!!p.watched} onChange={e => onUpdate(p.id, { watched: e.target.checked })} /> Watched</label>
-                <label><input type="checkbox" checked={!!p.replied} onChange={e => onUpdate(p.id, { replied: e.target.checked })} /> Replied</label>
-                <label>Stage
-                  <select className="form-select" value={p.outreach_stage || "New"} onChange={e => onUpdate(p.id, { outreachStage: e.target.value })}>
-                    {OUTREACH_STAGES.map(s => <option key={s}>{s}</option>)}
-                  </select>
-                </label>
-              </div>
-              <div className="detail-block">
                 <h4>Pipeline</h4>
                 {p.pushed_clinic_id ? (
                   <p className="crm-push-status pushed">Pushed to pipeline{p.pushed_at ? ` ${new Date(p.pushed_at).toLocaleString()}` : ""}</p>
                 ) : (
                   <>
                     <p className="crm-push-status muted">Not pushed yet</p>
+                    <p style={{ fontSize:12, color:"#475569", margin:"2px 0 8px" }}>Push to the pipeline, then track outreach on the business itself (Outreach tab).</p>
                     <button className="btn-primary push-crm-btn" type="button" onClick={() => onPush(p.id)}>Push to Pipeline</button>
                   </>
                 )}
@@ -2533,11 +2700,12 @@ function ProspectRow({ p, expanded, onToggle, onUpdate, onDelete, onPush }) {
   );
 }
 
-function ProspectingView({ onToast }) {
+function ProspectingView({ onToast, onPushed }) {
   const [prospects, setProspects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [trade, setTrade] = useState(PROSPECT_TRADES[0].value);
-  const [location, setLocation] = useState("");
+  const [city, setCity] = useState("");
+  const [usState, setUsState] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchStatus, setSearchStatus] = useState("");
   const [search, setSearch] = useState("");
@@ -2551,19 +2719,23 @@ function ProspectingView({ onToast }) {
 
   const handleSearch = async e => {
     e.preventDefault();
-    if (!trade || !location.trim()) return;
+    if (!trade || !city.trim() || !usState) return;
+    const location = `${city.trim()}, ${usState}`;
     setSearching(true);
     setSearchStatus(`Searching for ${trade} in ${location}…`);
     try {
-      const data = await prospectsDb.search(trade, location.trim());
-      if (data.added === 0 && data.skipped === 0) {
-        // Searches are US-only; a bare/ambiguous city often resolves abroad.
-        setSearchStatus(`No U.S. results for "${trade} in ${location.trim()}". Try adding the state, e.g. "Springfield, MO".`);
+      const data = await prospectsDb.search(trade, location);
+      const establishedNote = data.establishedSkipped > 0 ? ` (skipped ${data.establishedSkipped} already-established business${data.establishedSkipped > 1 ? "es" : ""})` : "";
+      if (data.added === 0) {
+        setSearchStatus(`No results for "${trade} in ${location}"${establishedNote}. Double-check the city spelling and try again.`);
+      } else if (data.skipped > 0) {
+        setSearchStatus(`Found ${data.added} prospect(s) — top ${data.added} of ${data.added + data.skipped} matches${establishedNote}.`);
       } else {
-        setSearchStatus(`Added ${data.added} new prospect(s), skipped ${data.skipped} already in your list.`);
+        setSearchStatus(`Found ${data.added} prospect(s)${establishedNote}.`);
       }
       const fresh = await prospectsDb.getAll();
       setProspects(fresh);
+      setExpandedId(null);
     } catch (err) {
       setSearchStatus(`Error: ${err.message}`);
     } finally {
@@ -2593,6 +2765,7 @@ function ProspectingView({ onToast }) {
       if (data.clinicId) {
         setProspects(prev => prev.map(p => (p.id === id ? { ...p, pushed_clinic_id: data.clinicId, pushed_at: data.pushedAt } : p)));
         onToast?.("Pushed to the pipeline");
+        onPushed?.();
       }
     } catch (err) {
       onToast?.(`Error: ${err.message}`);
@@ -2618,6 +2791,7 @@ function ProspectingView({ onToast }) {
     }
     setBulkPushing(false);
     onToast?.(`Pushed ${done} of ${targets.length} to the pipeline.`);
+    if (done > 0) onPushed?.();
   };
 
   const handleExportCsv = async () => {
@@ -2664,8 +2838,12 @@ function ProspectingView({ onToast }) {
           <select className="form-select" value={trade} onChange={e => setTrade(e.target.value)}>
             {PROSPECT_TRADES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
-          <input className="form-input" placeholder="City + state, e.g. San Luis Obispo, CA" value={location} onChange={e => setLocation(e.target.value)} />
-          <button className="btn-primary" type="submit" disabled={searching}>{searching ? "Searching…" : "Search"}</button>
+          <input className="form-input" placeholder="City, e.g. San Luis Obispo" value={city} onChange={e => setCity(e.target.value)} />
+          <select className="form-select" value={usState} onChange={e => setUsState(e.target.value)}>
+            <option value="">State…</option>
+            {US_STATES.map(([abbr, name]) => <option key={abbr} value={abbr}>{name}</option>)}
+          </select>
+          <button className="btn-primary" type="submit" disabled={searching || !city.trim() || !usState}>{searching ? "Searching…" : "Search"}</button>
         </form>
         {searchStatus && <div className="page-subtitle" style={{ marginBottom: 12 }}>{searchStatus}</div>}
 
@@ -2683,14 +2861,14 @@ function ProspectingView({ onToast }) {
           <button className="btn-ghost" type="button" onClick={handleExportCsv}>Export CSV</button>
         </div>
 
-        <div className="table-wrap">
+        <div className="prospecting-table-wrap">
           <table>
-            <thead><tr><th></th><th>Score</th><th>Business</th><th>Trade</th><th>Website</th><th>Contact</th><th>Social</th><th>Stage</th></tr></thead>
+            <thead><tr><th></th><th>Score</th><th>Business</th><th>Trade</th><th>Website</th><th>GBP</th><th>Contact</th><th>Social</th><th>Stage</th></tr></thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8}><div className="loading">Loading…</div></td></tr>
+                <tr><td colSpan={9}><div className="loading">Loading…</div></td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={8}>
+                <tr><td colSpan={9}>
                   <div className="empty-state">
                     <div className="empty-icon">&#128269;</div>
                     <div className="empty-title">{prospects.length === 0 ? "No prospects yet" : "No results"}</div>
@@ -2737,6 +2915,10 @@ export default function App() {
   }, [authed]);
 
   const showToast = msg => setToast(msg);
+
+  const refreshClinics = useCallback(async () => {
+    try { setClinics(await db.getAll()); } catch (_) {}
+  }, []);
 
   // Open launch modal. If clinic=null, show clinic picker first.
   const openLaunch = useCallback((clinic, prefillTrigger = null) => {
@@ -2821,6 +3003,15 @@ export default function App() {
     } catch (_) {}
   }, []);
 
+  // Partial update: merges `patch` into state and persists only those fields.
+  // Used by the Outreach tab so each field edit is independent (no clobbering
+  // from rapid successive edits, unlike the full-object handleUpdate above).
+  const handlePatch = useCallback(async (id, patch) => {
+    setClinics(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c));
+    setSelected(sel => sel?.id === id ? { ...sel, ...patch } : sel);
+    try { await db.update(id, patch); } catch (_) {}
+  }, []);
+
   if (!authed) return <SimpleLogin onLogin={() => setAuthed(true)} />;
   if (loading)  return <><style>{css}</style><div className="app"><div className="loading">Loading&#8230;</div></div></>;
 
@@ -2900,7 +3091,7 @@ export default function App() {
               onSelectClinic={c => setSelected(c)}
             />
           )}
-          {page === "prospecting" && <ProspectingView onToast={showToast} />}
+          {page === "prospecting" && <ProspectingView onToast={showToast} onPushed={refreshClinics} />}
           {page === "playbook" && <PlaybookView />}
         </main>
 
@@ -2948,6 +3139,8 @@ export default function App() {
             sequences={sequences}
             onClose={() => setSelected(null)}
             onUpdate={handleUpdate}
+            onPatch={handlePatch}
+            onDelete={id => { handleDelete(id); }}
             onOpenLaunch={(c, trig) => {
               setSelected(null);
               setTimeout(() => setLaunchTarget({ clinic: c, prefillTrigger: trig || null }), 100);

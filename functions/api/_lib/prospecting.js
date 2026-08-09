@@ -20,6 +20,8 @@ const FIELD_MASK = [
   "places.businessStatus",
   "places.googleMapsUri",
   "places.types",
+  "places.regularOpeningHours",
+  "places.photos",
 ].join(",");
 
 // The business only prospects in the US. Google's Text Search neither
@@ -74,7 +76,22 @@ export async function searchContractors({ trade, location, apiKey }) {
     businessStatus: p.businessStatus || "",
     googleMapsUrl: p.googleMapsUri || "",
     types: p.types || [],
+    hasHours: Boolean(p.regularOpeningHours && p.regularOpeningHours.periods && p.regularOpeningHours.periods.length),
+    photoCount: (p.photos || []).length,
   }));
+}
+
+// ─── Google Business Profile completeness ─────────────────────────────────
+// Every result here already has a Google Maps listing (that's how Places
+// found it) — the actual signal worth flagging is whether the profile looks
+// claimed and filled out, or left bare. Hours and photos are the two fields
+// an owner has to actively add; their absence together is the strongest
+// public proxy we have for "unclaimed or ignored."
+export function deriveGbpStatus({ hasHours, photoCount }) {
+  const hasPhotos = (photoCount || 0) > 0;
+  if (hasHours && hasPhotos) return "Complete";
+  if (!hasHours && !hasPhotos) return "Unclaimed / bare";
+  return "Incomplete";
 }
 
 // ─── Website check (lib/websiteCheck.js) ───────────────────────────────────
@@ -388,6 +405,8 @@ export function buildLeadNote(prospectRow) {
     if (check.mobileFriendly === false) bits.push("not mobile-friendly");
     if (check.agencyDetected) bits.push("already has an agency");
   }
+  if (prospectRow.gbp_status === "Unclaimed / bare") bits.push("Google Business Profile unclaimed/bare");
+  else if (prospectRow.gbp_status === "Incomplete") bits.push("Google Business Profile incomplete");
   return bits.length ? bits.join("; ") : "";
 }
 
@@ -404,6 +423,15 @@ export function mapProspectToClinic(prospectRow) {
     source: "Google Maps",
     priority: PRIORITY_MAP[prospectRow.tier] || "cold",
     lead_note: buildLeadNote(prospectRow),
+    // Outreach tracker carries over to the business — this is where all outreach
+    // gets tracked once a prospect is pushed to the pipeline.
+    channel: prospectRow.channel || null,
+    leak_flagged: prospectRow.leak_flagged || null,
+    date_sent: prospectRow.date_sent || null,
+    next_follow_up: prospectRow.next_follow_up || null,
+    watched: prospectRow.watched ? 1 : 0,
+    replied: prospectRow.replied ? 1 : 0,
+    outreach_stage: prospectRow.outreach_stage || "New",
   };
 }
 

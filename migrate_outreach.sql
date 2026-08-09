@@ -1,0 +1,7 @@
+ALTER TABLE clinics ADD COLUMN channel TEXT;
+ALTER TABLE clinics ADD COLUMN leak_flagged TEXT;
+ALTER TABLE clinics ADD COLUMN date_sent TEXT;
+ALTER TABLE clinics ADD COLUMN watched INTEGER DEFAULT 0;
+ALTER TABLE clinics ADD COLUMN replied INTEGER DEFAULT 0;
+ALTER TABLE clinics ADD COLUMN next_follow_up TEXT;
+ALTER TABLE clinics ADD COLUMN outreach_stage TEXT DEFAULT 'New';
