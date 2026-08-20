@@ -222,6 +222,8 @@ function tierColor(tier) {
 const TRIGGER_TYPES = [
   { id:"website_inquiry",   label:"Website Inquiry",        icon:"◻", color:"#a78bfa" },
   { id:"calculator_lead",   label:"Calculator Lead",        icon:"$", color:"#3a7bfd" },
+  { id:"audit_request",     label:"Intake Audit Request",   icon:"◎", color:"#f472b6" },
+  { id:"starter_request",   label:"Starter Site Request",   icon:"▢", color:"#22d3ee" },
   { id:"prospect_outreach", label:"Prospect Follow-up",     icon:"\u{1F3A5}", color:"#818cf8" },
   { id:"client_won",        label:"Deal Won / Onboarding",  icon:"✦", color:"#4ade80" },
   { id:"no_activity",       label:"Gone Quiet",             icon:"◌", color:"#f59e0b" },

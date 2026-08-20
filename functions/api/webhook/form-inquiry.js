@@ -223,7 +223,7 @@ export async function onRequestPost({ request, env }) {
 
     // Route to a package-specific sequence where one exists; everything else
     // falls into the generic website inquiry trigger.
-    const PACKAGE_TRIGGERS = { 'Calculator Lead Magnet': 'calculator_lead', 'Intake Audit': 'audit_request' };
+    const PACKAGE_TRIGGERS = { 'Calculator Lead Magnet': 'calculator_lead', 'Intake Audit': 'audit_request', 'Starter Site': 'starter_request' };
     const triggerKey = PACKAGE_TRIGGERS[pkg] || 'website_inquiry';
 
     const { results: seqRows } = await env.DB.prepare(
