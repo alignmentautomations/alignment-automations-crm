@@ -63,7 +63,7 @@ function wrapEmailHtml(bodyText) {
             ${textToHtml(bodyText)}
           </td></tr>
           <tr><td style="padding:16px 28px;border-top:1px solid #E2E9F1;font-family:Arial,sans-serif;font-size:12px;color:#8A929C;">
-            Alignment Automations &middot; admin@alignmentautomations.com
+            Alignment Automations &middot; hello@alignmentautomations.com
           </td></tr>
         </table>
       </td></tr>
@@ -74,7 +74,7 @@ function wrapEmailHtml(bodyText) {
 
 // Sends through the Google Apps Script relay (google-apps-script/mail-relay.gs),
 // which calls GmailApp.sendEmail, executing as alignment.automations@gmail.com
-// but sending as its verified admin@alignmentautomations.com alias — this
+// but sending as its verified hello@alignmentautomations.com alias — this
 // makes Gmail recognize the sender as a real Google Account and show its
 // profile photo as the avatar to recipients viewing in Gmail.
 async function sendEmail(to, subject, body, env) {
