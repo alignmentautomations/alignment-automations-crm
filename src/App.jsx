@@ -52,7 +52,8 @@ const STAGE_AUTO_TRIGGER = {
 
 // ─── Checklist Modules ──────────────────────────────────────────────────────────────────
 
-const INTAKE_PACKAGE = "Done-for-You Intake System";
+const INTAKE_PACKAGE  = "Done-for-You Intake System";
+const STARTER_PACKAGE = "Starter Site";
 
 const MODULES = {
   intake_system: {
@@ -143,10 +144,57 @@ const MODULES = {
       { name:"Cancel billing the same day", done:false, section:"Phase 7 · Offboarding (if they cancel)" },
     ],
   },
+  starter_site: {
+    // Starter Site: a one-time website build. No EIN, no carrier registration,
+    // no missed-call text-back - so none of the A2P/SMS phases apply here.
+    clinic: [
+      { name:"Pay the 50% deposit to start", done:false, section:"Phase 0 · Sale" },
+      { name:"Sign the service agreement", done:false, section:"Phase 0 · Sale" },
+      { name:"Attend the kickoff call", done:false, section:"Phase 1 · Day 1 · Kickoff" },
+      { name:"Provide business details: legal name, phone, email, service area, hours", done:false, section:"Phase 1 · Day 1 · Kickoff" },
+      { name:"Provide services list and rough price ranges", done:false, section:"Phase 1 · Day 1 · Kickoff" },
+      { name:"Send photos of real work (phone photos are fine)", done:false, section:"Phase 1 · Day 1 · Kickoff" },
+      { name:"Send logo, if you have one", done:false, section:"Phase 1 · Day 1 · Kickoff" },
+      { name:"Send reviews or testimonials to feature", done:false, section:"Phase 1 · Day 1 · Kickoff" },
+      { name:"Confirm the domain name you want (or hand over the existing one)", done:false, section:"Phase 1 · Day 1 · Kickoff" },
+      { name:"Provide CSLB license number + insurance details for the compliance display", done:false, section:"Phase 1 · Day 1 · Kickoff" },
+      { name:"All content delivered within 14 days (project pauses past that)", done:false, section:"Phase 1 · Day 1 · Kickoff" },
+      { name:"Review the preview link and send one consolidated round of revisions", done:false, section:"Phase 3 · Review" },
+      { name:"Approve for launch", done:false, section:"Phase 3 · Review" },
+      { name:"Pay the balance before launch", done:false, section:"Phase 4 · Launch" },
+      { name:"Complete your Google Business Profile using the setup guide (about an hour)", done:false, section:"Phase 5 · After launch" },
+    ],
+    alignment: [
+      { name:"Confirm scope: 3–5 pages, fixed count · extra pages quoted separately", done:false, section:"Phase 0 · Sale" },
+      { name:"Collect 50% deposit; send agreement + intake form", done:false, section:"Phase 0 · Sale" },
+      { name:"Run the kickoff call; collect content, photos, domain, CSLB details", done:false, section:"Phase 1 · Day 1 · Kickoff" },
+      { name:"Send the Google Business Profile Setup Guide to the client", done:false, section:"Phase 1 · Day 1 · Kickoff" },
+      { name:"Register or delegate the domain; configure DNS", done:false, section:"Phase 2 · Build" },
+      { name:"Set up hosting", done:false, section:"Phase 2 · Build" },
+      { name:"Build the 3–5 page mobile-first site", done:false, section:"Phase 2 · Build" },
+      { name:"Wire the contact form to the webhook + auto-confirmation email", done:false, section:"Phase 2 · Build" },
+      { name:"Connect online booking to the client calendar", done:false, section:"Phase 2 · Build" },
+      { name:"Add CSLB-compliant license + insurance display", done:false, section:"Phase 2 · Build" },
+      { name:"Email deliverability: SPF, DKIM, DMARC", done:false, section:"Phase 2 · Build" },
+      { name:"QA: submit the form as a real customer; confirm it lands and auto-replies", done:false, section:"Phase 2 · Build" },
+      { name:"QA: book a test appointment; confirm calendar sync", done:false, section:"Phase 2 · Build" },
+      { name:"QA: mobile/responsive + page-speed check", done:false, section:"Phase 2 · Build" },
+      { name:"Proofread all copy; verify phone, email, service area, hours", done:false, section:"Phase 2 · Build" },
+      { name:"Send preview link", done:false, section:"Phase 3 · Review" },
+      { name:"Implement the included revision round (bill hourly beyond it)", done:false, section:"Phase 3 · Review" },
+      { name:"Collect balance", done:false, section:"Phase 4 · Launch" },
+      { name:"DNS cutover; confirm the site loads on the real domain", done:false, section:"Phase 4 · Launch" },
+      { name:"Send the \"you're live\" summary + handover details", done:false, section:"Phase 4 · Launch" },
+      { name:"Mark stage – Live", done:false, section:"Phase 4 · Launch" },
+      { name:"If on the $49/mo care plan: set up recurring billing + monitoring", done:false, section:"Phase 5 · After launch" },
+      { name:"Offer the Intake System upgrade path when it fits (pay the difference, no rebuild)", done:false, section:"Phase 5 · After launch" },
+    ],
+  },
 };
 
 const PACKAGE_MODULES = {
-  [INTAKE_PACKAGE]: ["intake_system"],
+  [INTAKE_PACKAGE]:  ["intake_system"],
+  [STARTER_PACKAGE]: ["starter_site"],
 };
 
 function getPackageTasks(pkg) {
@@ -156,11 +204,13 @@ function getPackageTasks(pkg) {
   return { alignment: al, clinic: cl };
 }
 
-const PACKAGES = [INTAKE_PACKAGE];
+const PACKAGES = [STARTER_PACKAGE, INTAKE_PACKAGE];
 
 // Accounts / access the client must own, per the onboarding checklist.
 const PACKAGE_ACCOUNTS = {
-  [INTAKE_PACKAGE]: ["EIN / tax ID", "Registered business address", "Authorized rep mobile (OTP)", "Business phone + carrier type"],
+  [INTAKE_PACKAGE]:  ["EIN / tax ID", "Registered business address", "Authorized rep mobile (OTP)", "Business phone + carrier type"],
+  // Starter Site is a website build only - no carrier registration, so none of the A2P data is needed.
+  [STARTER_PACKAGE]: ["Domain (or authorization to register one)", "CSLB license + insurance details", "Calendar to connect for booking"],
 };
 
 // ─── Prospecting (from the outreach playbook) ───────────────────────────────────
@@ -226,6 +276,7 @@ const TRIGGER_TYPES = [
   { id:"starter_request",   label:"Starter Site Request",   icon:"▢", color:"#22d3ee" },
   { id:"prospect_outreach", label:"Prospect Follow-up",     icon:"\u{1F3A5}", color:"#818cf8" },
   { id:"client_won",        label:"Deal Won / Onboarding",  icon:"✦", color:"#4ade80" },
+  { id:"starter_won",       label:"Starter Site Won",       icon:"▲", color:"#2dd4bf" },
   { id:"no_activity",       label:"Gone Quiet",             icon:"◌", color:"#f59e0b" },
   { id:"manual",            label:"Manual Trigger",         icon:"◆", color:"#64748b" },
 ];
@@ -2944,11 +2995,15 @@ export default function App() {
     setSelected(sel => sel?.id === id ? { ...sel, status: newStatus } : sel);
     try { await db.update(id, { status: newStatus }); } catch (_) {}
 
-    const trigId    = STAGE_AUTO_TRIGGER[newStatus];
+    // A won deal fires a different onboarding sequence depending on which plan
+    // they bought - a Starter Site client has no carrier step and a much
+    // shorter build, so the Intake System onboarding email would be wrong.
+    let trigId      = STAGE_AUTO_TRIGGER[newStatus];
+    if (trigId === "client_won" && (updatedClinic?.package === STARTER_PACKAGE)) trigId = "starter_won";
     const activeSeq = trigId && sequences.find(s => s.trigger === trigId && s.active);
     const alreadyRan = trigId && clinic && (clinic.followUps||[]).some(f => f.trigger === trigId && (f.status === "active" || f.status === "completed"));
 
-    if (trigId === "client_won" && activeSeq && updatedClinic && !alreadyRan) {
+    if ((trigId === "client_won" || trigId === "starter_won") && activeSeq && updatedClinic && !alreadyRan) {
       // Deal just closed — auto-send the onboarding email immediately, no confirmation needed.
       const fu = {
         id: uid(), seqId: activeSeq.id, seqName: activeSeq.name, trigger: trigId,

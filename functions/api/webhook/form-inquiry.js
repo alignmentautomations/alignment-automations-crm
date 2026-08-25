@@ -21,11 +21,7 @@ function corsHeaders(origin) {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    // x-webhook-secret is still *tolerated* so that deploying this function
-    // doesn't break the currently-live pages, which still send it. It is no
-    // longer checked or required, and the pages stop sending it once the site
-    // redeploys. Safe to drop from this list after that.
-    'Access-Control-Allow-Headers': 'Content-Type, x-webhook-secret',
+    'Access-Control-Allow-Headers': 'Content-Type',
     'Vary': 'Origin',
   };
 }
