@@ -8,13 +8,17 @@
 // Setup:
 //   1. Go to https://script.google.com while logged into alignment.automations@gmail.com
 //   2. New project → paste this file's contents in as Code.gs
-//   3. Replace SHARED_SECRET below with the value provided (matches APPSSCRIPT_SECRET)
+//   3. Replace SHARED_SECRET below with the APPSSCRIPT_SECRET value from Cloudflare
 //   4. Deploy → New deployment → type: Web app
 //        Execute as: Me (alignment.automations@gmail.com)
 //        Who has access: Anyone
 //   5. Copy the deployment URL — send it back so it can be wired in as APPSSCRIPT_URL
 
-const SHARED_SECRET = 'Gbr9HBz320tFWCVCjcj07lghk1Ju4X5o';
+// The real value is NOT stored here - this repo is public.
+// It lives in two places, which must always match:
+//   1. the deployed Apps Script project (paste it there directly)
+//   2. the APPSSCRIPT_SECRET secret on the Cloudflare Pages project AND the cron worker
+const SHARED_SECRET = 'REPLACE_ME_WITH_THE_VALUE_FROM_CLOUDFLARE';
 
 function doPost(e) {
   try {
