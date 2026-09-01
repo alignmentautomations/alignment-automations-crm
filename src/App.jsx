@@ -2010,7 +2010,14 @@ function DashboardView({ clinics, sequences, onAdd, onEdit, onDelete, onSelect, 
                       {c.contact_email && <div style={{ fontSize:11, color:"#475569", marginTop:1 }}>{c.contact_email}</div>}
                     </td>
                     <td style={{ fontSize:12, color:"#64748b" }}>{c.package || "&#8212;"}</td>
-                    <td><StatusDropdown status={c.status} onChange={s => onStatusChange(c.id, s)} /></td>
+                    <td>
+                      <StatusDropdown status={c.status} onChange={s => onStatusChange(c.id, s)} />
+                      {c.outreach_stage && c.outreach_stage !== "New" && (
+                        <div style={{ marginTop:4 }}>
+                          <span style={{ fontSize:10, color:"#60a5fa" }}>&#9679; {c.outreach_stage}</span>
+                        </div>
+                      )}
+                    </td>
                     <td>
                       {activeFuCount > 0 ? (
                         <span className="fu-badge fu-active" style={{ cursor:"pointer" }} onClick={() => onSelect(c)}>{activeFuCount} active</span>
@@ -2056,6 +2063,9 @@ function DashboardView({ clinics, sequences, onAdd, onEdit, onDelete, onSelect, 
                 </div>
                 <div className="clinic-list-card-right">
                   <div onClick={e => e.stopPropagation()}><StatusDropdown status={c.status} onChange={s => onStatusChange(c.id, s)} /></div>
+                  {c.outreach_stage && c.outreach_stage !== "New" && (
+                    <span style={{ fontSize:10, color:"#60a5fa" }}>&#9679; {c.outreach_stage}</span>
+                  )}
                   {activeFuCount > 0 && <span className="fu-badge fu-active">{activeFuCount} active</span>}
                 </div>
               </div>
@@ -2127,6 +2137,12 @@ function PipelineView({ clinics, sequences, onSelect, onStatusChange, onOpenLaun
                                   <div className="card-name">{c.name}</div>
                                   <div className="card-contact">{c.contact_name || "&#8212;"}</div>
                                   <div className="card-date">{formatDate(c.start_date)}</div>
+                                  {c.outreach_stage && c.outreach_stage !== "New" && (
+                                    <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:5 }}>
+                                      <span style={{ width:6, height:6, borderRadius:"50%", background:"#60a5fa", display:"inline-block" }} />
+                                      <span style={{ fontSize:10, color:"#60a5fa" }}>{c.outreach_stage}</span>
+                                    </div>
+                                  )}
                                   {activeFu.length > 0 && (
                                     <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:5 }}>
                                       <span style={{ width:6, height:6, borderRadius:"50%", background:"#4ade80", display:"inline-block" }} />

@@ -8,6 +8,12 @@
       "port": 5173
     },
     {
+      "name": "CRM (Pages Functions, local D1)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["wrangler", "pages", "dev", "dist", "--port", "8788"],
+      "port": 8788
+    },
+    {
       "name": "Website (Static HTML)",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["serve", "C:/Users/Admin/website", "-l", "3000"],
