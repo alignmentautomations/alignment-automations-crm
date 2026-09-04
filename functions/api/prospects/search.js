@@ -21,11 +21,21 @@ import {
 const MAX_RESULTS_PER_SEARCH = 10;
 const CONCURRENCY = 4;
 
-// Google's review count is a strong proxy for "already an established,
-// thriving business" — these don't need a lead-gen fix and just crowd out
-// the smaller/newer businesses the playbook is actually targeting. Filtered
-// out before the website check to also save a subrequest per skip.
-const ESTABLISHED_REVIEW_THRESHOLD = 40;
+// Review count is a FLOOR, not a ceiling. This used to drop everyone with 40+
+// reviews on the theory that they were "already established" — which had it
+// exactly backwards against the playbook (spec-build-outreach-workflow.md §1):
+// active reviews are a strong-yes signal ("they have work, so they have
+// money"), and the documented skip is "fewer than 10 reviews, or none in the
+// last year". The old ceiling meant a search for plumbers in Santa Maria
+// returned exactly one business, because every established shop there carries
+// 50-1,188 reviews. It also selected FOR dead listings: Alpha Painting came
+// through as a warm prospect on 1 review.
+//
+// "Too established to need us" is already handled properly by the scoring —
+// visibleProblem is +3 and hasAgency is -3 — so a big shop with a clean
+// agency-built site lands in "Park it" on its own merits without being hidden.
+// Filtered before the website check to save a subrequest per skip.
+const MIN_REVIEW_COUNT = 10;
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -48,8 +58,22 @@ export async function onRequestPost({ request, env }) {
     // hard to diagnose without this.
     const apiKey = (env.GOOGLE_PLACES_API_KEY || "").trim();
     const rawResults = await searchContractors({ trade, location, apiKey });
-    const results = rawResults.filter((r) => (r.reviewCount || 0) < ESTABLISHED_REVIEW_THRESHOLD);
-    const establishedSkipped = rawResults.length - results.length;
+    const results = rawResults.filter((r) => (r.reviewCount || 0) >= MIN_REVIEW_COUNT);
+    const lowReviewSkipped = rawResults.length - results.length;
+
+    // Rank before the cap, not after. The cap used to slice Google's own
+    // ordering, which is roughly by prominence — so the ten slots went to the
+    // biggest shops in town and the businesses with actual website problems
+    // fell off the bottom. These two signals come back on the Places response
+    // already, so ranking on them costs no extra subrequests. The full score
+    // still can't run here: it needs the website check, which is the expensive
+    // part we're capping in the first place.
+    const prospectingRank = (r) => {
+      if (!r.website) return 0;                                   // no site at all: the strongest signal there is
+      if (!r.hasHours && !(r.photoCount > 0)) return 1;           // bare/unclaimed GBP
+      return 2;                                                   // has a site: worth checking, but last in line
+    };
+    results.sort((a, b) => prospectingRank(a) - prospectingRank(b));
 
     // The prospect list is a per-search scratchpad, not an archive: each search
     // replaces the previous list entirely. Anything worth keeping gets pushed
@@ -113,7 +137,7 @@ export async function onRequestPost({ request, env }) {
     // result (homepage + 1 contact-page fallback if no email found on it).
     const subrequestsApprox = 1 + prospects.length * 2;
 
-    return new Response(JSON.stringify({ added: prospects.length, skipped, establishedSkipped, subrequestsApprox }), {
+    return new Response(JSON.stringify({ added: prospects.length, skipped, lowReviewSkipped, subrequestsApprox }), {
       status: 200, headers: { "Content-Type": "application/json" },
     });
   } catch (err) {

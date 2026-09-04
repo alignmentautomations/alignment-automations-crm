@@ -2794,13 +2794,13 @@ function ProspectingView({ onToast, onPushed }) {
     setSearchStatus(`Searching for ${trade} in ${location}…`);
     try {
       const data = await prospectsDb.search(trade, location);
-      const establishedNote = data.establishedSkipped > 0 ? ` (skipped ${data.establishedSkipped} already-established business${data.establishedSkipped > 1 ? "es" : ""})` : "";
+      const lowReviewNote = data.lowReviewSkipped > 0 ? ` (skipped ${data.lowReviewSkipped} with under 10 reviews)` : "";
       if (data.added === 0) {
-        setSearchStatus(`No results for "${trade} in ${location}"${establishedNote}. Double-check the city spelling and try again.`);
+        setSearchStatus(`No results for "${trade} in ${location}"${lowReviewNote}. Double-check the city spelling and try again.`);
       } else if (data.skipped > 0) {
-        setSearchStatus(`Found ${data.added} prospect(s) — top ${data.added} of ${data.added + data.skipped} matches${establishedNote}.`);
+        setSearchStatus(`Found ${data.added} prospect(s) — top ${data.added} of ${data.added + data.skipped} matches${lowReviewNote}.`);
       } else {
-        setSearchStatus(`Found ${data.added} prospect(s)${establishedNote}.`);
+        setSearchStatus(`Found ${data.added} prospect(s)${lowReviewNote}.`);
       }
       const fresh = await prospectsDb.getAll();
       setProspects(fresh);
