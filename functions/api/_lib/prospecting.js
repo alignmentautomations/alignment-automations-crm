@@ -98,6 +98,22 @@ export function deriveGbpStatus({ hasHours, photoCount }) {
 
 const TIMEOUT_MS = 8000;
 
+// A self-identifying bot string is what WAFs block, and the businesses most
+// likely to sit behind Cloudflare or Akamai are the established ones — so the
+// old "AlignmentProspector/1.0" UA got refused precisely by the sites least
+// likely to actually be broken, and every refusal scored as a defect. Present
+// as a normal browser instead.
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+
+// Status codes that mean "we were refused", not "this site is broken". A
+// homeowner opening the same URL in a real browser sees a working site.
+// Treating these as a defect is the same mistake as reading a 403 from curl as
+// "site unreachable" — it put an unrelated business on a spec-build shortlist
+// once already. 429 is rate limiting, 401/403 are refusals, 999 is LinkedIn's
+// non-standard block code.
+const REFUSED_STATUSES = new Set([401, 403, 429, 451, 999]);
+
 // Phrases that *can* precede an agency credit — but the phrase alone isn't
 // enough evidence (see detectAgency below). Deliberately excludes "powered
 // by": that phrase is almost always a CMS/plugin credit ("Powered by
@@ -237,7 +253,7 @@ async function fetchHtml(url, signal) {
   const res = await fetch(url, {
     signal,
     redirect: "follow",
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; AlignmentProspector/1.0)" },
+    headers: { "User-Agent": BROWSER_UA, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.9" },
   });
   return { res, html: res.ok ? await res.text() : "" };
 }
@@ -265,7 +281,11 @@ export async function checkWebsite(rawUrl) {
       // leave null
     }
 
-    const mobileFriendly = /<meta[^>]+name=["']viewport["']/i.test(html);
+    // Three states, not two. `false` has to mean "we looked and the tag is
+    // absent"; with no HTML to look at the honest answer is `null`. Reporting
+    // `false` off an empty body let one refused fetch manufacture a second
+    // defect on top of the reachability one.
+    const mobileFriendly = html ? /<meta[^>]+name=["']viewport["']/i.test(html) : null;
     const agencyDetected = detectAgency(html, siteHostname);
     const builder = BUILDER_PATTERNS.find((b) => b.re.test(html));
     const social = extractSocialLinks(html);
@@ -277,7 +297,10 @@ export async function checkWebsite(rawUrl) {
 
     return {
       attempted: true,
-      reachable: res.ok,
+      // null means "could not determine", never "broken". A refusal proves
+      // nothing about whether the site works for a real visitor.
+      reachable: res.ok ? true : (REFUSED_STATUSES.has(res.status) ? null : false),
+      refused: REFUSED_STATUSES.has(res.status),
       statusCode: res.status,
       loadTimeMs,
       mobileFriendly,
@@ -287,9 +310,15 @@ export async function checkWebsite(rawUrl) {
       social,
     };
   } catch (err) {
+    // A timeout is our 8-second budget running out, which a slow-but-working
+    // site trips routinely — inconclusive, so `null`. A genuine transport
+    // failure (DNS miss, refused connection, bad TLS) is real evidence the
+    // site is broken for everyone, so that stays `false`.
+    const timedOut = err.name === "AbortError";
     return {
       attempted: true,
-      reachable: false,
+      reachable: timedOut ? null : false,
+      refused: false,
       statusCode: null,
       loadTimeMs: Date.now() - started,
       mobileFriendly: null,
@@ -297,7 +326,7 @@ export async function checkWebsite(rawUrl) {
       builderPlatform: null,
       email: null,
       social: EMPTY_SOCIAL,
-      error: err.name === "AbortError" ? "timeout" : err.message,
+      error: timedOut ? "timeout" : err.message,
     };
   } finally {
     clearTimeout(timer);
@@ -361,6 +390,11 @@ export function tierFor(score) {
 
 export function deriveAutoSignals({ website, websiteCheck, phone, email }) {
   const hasWebsite = Boolean(website);
+  // The `=== false` here is load-bearing, not defensive style. checkWebsite
+  // reports three states and `null` means "could not determine" — a WAF refusal
+  // or a timeout. Loosening either of these to a truthy check would score every
+  // bot-blocked site as broken, which is the bug that had well-established
+  // businesses coming back "Warm".
   const siteBroken = hasWebsite && websiteCheck && websiteCheck.reachable === false;
   const notMobileFriendly = hasWebsite && websiteCheck && websiteCheck.mobileFriendly === false;
 

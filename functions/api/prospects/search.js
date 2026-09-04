@@ -21,21 +21,23 @@ import {
 const MAX_RESULTS_PER_SEARCH = 10;
 const CONCURRENCY = 4;
 
-// Review count is a FLOOR, not a ceiling. This used to drop everyone with 40+
-// reviews on the theory that they were "already established" — which had it
-// exactly backwards against the playbook (spec-build-outreach-workflow.md §1):
-// active reviews are a strong-yes signal ("they have work, so they have
-// money"), and the documented skip is "fewer than 10 reviews, or none in the
-// last year". The old ceiling meant a search for plumbers in Santa Maria
-// returned exactly one business, because every established shop there carries
-// 50-1,188 reviews. It also selected FOR dead listings: Alpha Painting came
-// through as a warm prospect on 1 review.
+// Review count RANKS, it never excludes. Two earlier versions got this wrong in
+// opposite directions and both hid real prospects:
 //
-// "Too established to need us" is already handled properly by the scoring —
-// visibleProblem is +3 and hasAgency is -3 — so a big shop with a clean
-// agency-built site lands in "Park it" on its own merits without being hidden.
-// Filtered before the website check to save a subrequest per skip.
-const MIN_REVIEW_COUNT = 10;
+//   - Originally a ceiling: drop everyone with 40+ reviews as "already
+//     established." Backwards against the playbook, which calls active reviews
+//     a strong-yes signal ("they have work, so they have money"). It meant
+//     plumbers in Santa Maria returned exactly one business, because every shop
+//     there carries 50-1,188 reviews.
+//   - Then briefly a floor at 10, from the playbook's "fewer than 10 reviews"
+//     skip. Same mistake wearing the other hat: it would have hidden the one
+//     result the ceiling did return, and Matt's call is that some sub-10
+//     businesses still look like good prospects.
+//
+// The playbook's review guidance is a guideline, not a gate, so it belongs in
+// the ordering and not in a filter. Thin-review businesses sort below
+// comparable ones and stay on the list, where a person can judge them.
+const THIN_REVIEW_COUNT = 10;
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -58,22 +60,28 @@ export async function onRequestPost({ request, env }) {
     // hard to diagnose without this.
     const apiKey = (env.GOOGLE_PLACES_API_KEY || "").trim();
     const rawResults = await searchContractors({ trade, location, apiKey });
-    const results = rawResults.filter((r) => (r.reviewCount || 0) >= MIN_REVIEW_COUNT);
-    const lowReviewSkipped = rawResults.length - results.length;
+    // Nothing is excluded on review count. Every business Places returns stays
+    // on the list; the ordering decides what makes the cap.
+    const results = rawResults.slice();
+    const thinReviewCount = results.filter((r) => (r.reviewCount || 0) < THIN_REVIEW_COUNT).length;
 
     // Rank before the cap, not after. The cap used to slice Google's own
     // ordering, which is roughly by prominence — so the ten slots went to the
     // biggest shops in town and the businesses with actual website problems
-    // fell off the bottom. These two signals come back on the Places response
-    // already, so ranking on them costs no extra subrequests. The full score
-    // still can't run here: it needs the website check, which is the expensive
-    // part we're capping in the first place.
-    const prospectingRank = (r) => {
+    // fell off the bottom. Every signal used here comes back on the Places
+    // response already, so ranking costs no extra subrequests. The full score
+    // still can't run at this point: it needs the website check, which is the
+    // expensive part we're capping in the first place.
+    const siteRank = (r) => {
       if (!r.website) return 0;                                   // no site at all: the strongest signal there is
       if (!r.hasHours && !(r.photoCount > 0)) return 1;           // bare/unclaimed GBP
       return 2;                                                   // has a site: worth checking, but last in line
     };
-    results.sort((a, b) => prospectingRank(a) - prospectingRank(b));
+    // Secondary, and deliberately weak: a business with almost no reviews may
+    // be dormant, so it sorts below a comparable one with a real review
+    // history. It is never removed — see THIN_REVIEW_COUNT above.
+    const thinRank = (r) => ((r.reviewCount || 0) < THIN_REVIEW_COUNT ? 1 : 0);
+    results.sort((a, b) => siteRank(a) - siteRank(b) || thinRank(a) - thinRank(b));
 
     // The prospect list is a per-search scratchpad, not an archive: each search
     // replaces the previous list entirely. Anything worth keeping gets pushed
@@ -137,7 +145,7 @@ export async function onRequestPost({ request, env }) {
     // result (homepage + 1 contact-page fallback if no email found on it).
     const subrequestsApprox = 1 + prospects.length * 2;
 
-    return new Response(JSON.stringify({ added: prospects.length, skipped, lowReviewSkipped, subrequestsApprox }), {
+    return new Response(JSON.stringify({ added: prospects.length, skipped, thinReviewCount, subrequestsApprox }), {
       status: 200, headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
