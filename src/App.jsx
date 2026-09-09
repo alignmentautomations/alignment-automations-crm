@@ -2652,6 +2652,47 @@ function gbpCell(p) {
   return <span style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:12, color }}><span style={{ width:7, height:7, borderRadius:"50%", background:color, flexShrink:0 }} />{p.gbp_status}</span>;
 }
 
+// CSLB licence, from the `licenses` table (tools/build-license-import.py).
+// That export is ACTIVE LICENCES ONLY, so "NOT ACTIVE" means no active licence
+// carries this name -- Step 0 failed and the prospect is disqualified.
+// "UNMATCHED"/"AMBIGUOUS" mean the lookup would not guess: expand the row.
+const LICENSE_COLOR = {
+  CLEAR: "#10b981",
+  "NOT ACTIVE": "#ef4444",
+  UNMATCHED: "#64748b",
+  AMBIGUOUS: "#64748b",
+};
+
+function licenseCandidates(p) {
+  const raw = p.license_candidates;
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try { return JSON.parse(raw) || []; } catch { return []; }
+}
+
+function licenseCell(p) {
+  const st = p.license_status;
+  if (!st) return <span className="no-site">&#8212;</span>;
+  // Any suspension reason that is not CLEAR is a hard red.
+  const color = LICENSE_COLOR[st] || "#ef4444";
+  // A pending secondary status means the licence is active TODAY but queued to
+  // be suspended -- the case a date-based recheck reminder misses entirely.
+  const pending = p.license_secondary ? " ⚠" : "";
+  const label = st === "CLEAR" ? (p.license_no || "active") : st;
+  return (
+    <span
+      title={[p.license_name, p.license_classes, p.license_secondary,
+              p.license_expiration && "expires " + p.license_expiration,
+              p.license_bond_cancel && "bond cancels " + p.license_bond_cancel]
+             .filter(Boolean).join(" · ")}
+      style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:12, color }}
+    >
+      <span style={{ width:7, height:7, borderRadius:"50%", background:color, flexShrink:0 }} />
+      {label}{pending}
+    </span>
+  );
+}
+
 const SOCIAL_LABELS = { facebook: "FB", instagram: "IG", twitter: "X", linkedin: "in" };
 const SOCIAL_FULL_LABELS = { facebook: "Facebook", instagram: "Instagram", twitter: "Twitter/X", linkedin: "LinkedIn" };
 
@@ -2708,13 +2749,14 @@ function ProspectRow({ p, expanded, onToggle, onUpdate, onDelete, onPush }) {
         <td>{p.trade}</td>
         <td>{websiteCell(p)}</td>
         <td>{gbpCell(p)}</td>
+        <td>{licenseCell(p)}</td>
         <td>{p.phone}{p.phone && p.email && <br />}{p.email}</td>
         <td>{socialCell(p)}</td>
         <td>{p.outreach_stage}</td>
       </tr>
       {expanded && (
         <tr className="detail-row">
-          <td colSpan={9}>
+          <td colSpan={10}>
             <div className="detail-grid">
               <div className="detail-block">
                 <h4>Signals (auto)</h4>
@@ -2729,6 +2771,43 @@ function ProspectRow({ p, expanded, onToggle, onUpdate, onDelete, onPush }) {
                 <label><input type="checkbox" checked={!!signals.runsAds} onChange={e => onUpdate(p.id, { manualSignals: { runsAds: e.target.checked } })} /> Runs Google/Facebook ads (+3)</label>
                 <label><input type="checkbox" checked={!!signals.growthIntent} onChange={e => onUpdate(p.id, { manualSignals: { growthIntent: e.target.checked } })} /> Growth intent — fresh reviews/photos/hiring (+2)</label>
                 <label><input type="checkbox" checked={!!signals.ownerOperated} onChange={e => onUpdate(p.id, { manualSignals: { ownerOperated: e.target.checked } })} /> Owner-operated, small team (+2)</label>
+              </div>
+              <div className="detail-block">
+                <h4>CSLB licence</h4>
+                {p.license_status === "CLEAR" ? (
+                  <ul className="auto-signals">
+                    <li className="on">✓ {p.license_no} — {p.license_name}</li>
+                    <li className="on">✓ {p.license_classes}, expires {p.license_expiration}</li>
+                    {p.license_secondary && <li>⚠ {p.license_secondary} — active today, queued to suspend</li>}
+                    {p.license_bond_cancel && <li>⚠ bond cancels {p.license_bond_cancel} — auto-suspends that day</li>}
+                  </ul>
+                ) : p.license_status === "NOT ACTIVE" ? (
+                  <div style={{ fontSize: 12, color: "#ef4444" }}>
+                    No active CSLB licence found under this name.
+                    <strong> Step 0 fails — do not build.</strong>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: "#475569" }}>
+                    {p.license_status === "AMBIGUOUS"
+                      ? "That phone number is on more than one licence, so it was not guessed."
+                      : "No licence matched this phone number — CSLB often holds a different one."}
+                    {licenseCandidates(p).length > 0 && (
+                      <ul className="auto-signals" style={{ marginTop: 6 }}>
+                        {licenseCandidates(p).map(c => (
+                          <li key={c.licenseNo}>
+                            {c.licenseNo} — {c.name}{c.city ? ", " + c.city : ""} · {c.classes} · {c.status}
+                            {c.secondary ? " · " + c.secondary : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <div style={{ marginTop: 6 }}>
+                      Candidates only — confirm on{" "}
+                      <a href="https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/CheckLicense.aspx"
+                         target="_blank" rel="noopener noreferrer">cslb.ca.gov</a> before building.
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="detail-block">
                 <h4>Contact</h4>
@@ -2932,7 +3011,7 @@ function ProspectingView({ onToast, onPushed }) {
 
         <div className="prospecting-table-wrap">
           <table>
-            <thead><tr><th></th><th>Score</th><th>Business</th><th>Trade</th><th>Website</th><th>GBP</th><th>Contact</th><th>Social</th><th>Stage</th></tr></thead>
+            <thead><tr><th></th><th>Score</th><th>Business</th><th>Trade</th><th>Website</th><th>GBP</th><th>Licence</th><th>Contact</th><th>Social</th><th>Stage</th></tr></thead>
             <tbody>
               {loading ? (
                 <tr><td colSpan={9}><div className="loading">Loading…</div></td></tr>

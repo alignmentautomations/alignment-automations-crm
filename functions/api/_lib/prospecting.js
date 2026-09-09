@@ -489,3 +489,135 @@ export async function runWithConcurrency(items, limit, fn) {
   await Promise.all(workers);
   return results;
 }
+
+// ─── CSLB licence verification ────────────────────────────────────────────
+//
+// Step 0 of the spec-build workflow -- confirming a contractor is actually
+// licensed -- used to be a browser session against cslb.ca.gov, per prospect,
+// before any other work happened. CSLB publishes the whole state as a CSV;
+// tools/build-license-import.py loads the Central Coast slice into `licenses`.
+//
+// THE KEY PROPERTY: that export contains ACTIVE LICENCES ONLY. Verified
+// 2026-09-09 against All Seasons Heating & Air (797810, expired 07/31/2025),
+// which is absent, while four licences confirmed active by hand are all
+// present and match field for field. So a miss is meaningful -- but see the
+// warning on phone matching below before treating it as a verdict.
+//
+// This never throws. A licence lookup failing must never cost Matt a search he
+// has already paid Google for, so every path returns a shaped object and the
+// caller stores whatever it gets.
+
+const LICENSE_STOPWORDS = new Set([
+  "painting", "plumbing", "heating", "air", "conditioning", "and", "the",
+  "inc", "llc", "co", "company", "services", "service", "mechanical", "sheet",
+  "metal", "professional", "electric", "electrical", "construction", "of",
+  "son", "sons", "roofing", "landscaping", "landscape", "contractors",
+  "contractor", "general", "hvac",
+]);
+
+export function phoneDigits(s) {
+  const d = String(s || "").replace(/\D/g, "");
+  // Places returns "+1 805-543-1135"; CSLB stores "(805) 543 1135".
+  return d.length === 11 && d.startsWith("1") ? d.slice(1) : d;
+}
+
+const EMPTY_LICENSE = {
+  licenseNo: null, status: "UNMATCHED", secondary: null, classes: null,
+  expiration: null, bondCancel: null, licenseName: null, candidates: [],
+};
+
+// One query for the whole result page rather than one per prospect: a search
+// returns up to ten businesses and ten separate D1 round trips inside a Pages
+// Function is wasteful when a single IN clause does it.
+export async function lookupLicenses(db, businesses) {
+  const out = new Map();
+  for (const b of businesses) out.set(b.placeId, { ...EMPTY_LICENSE });
+  if (!db || !businesses.length) return out;
+
+  try {
+    const byPhone = new Map();
+    for (const b of businesses) {
+      const p = phoneDigits(b.phone);
+      if (p.length === 10) {
+        if (!byPhone.has(p)) byPhone.set(p, []);
+        byPhone.get(p).push(b);
+      }
+    }
+    const phones = [...byPhone.keys()];
+    if (phones.length) {
+      const marks = phones.map(() => "?").join(",");
+      const { results } = await db.prepare(
+        `SELECT license_no, business_name, phone_digits, primary_status,
+                secondary_status, classifications, expiration_date, bond_cancellation
+           FROM licenses WHERE phone_digits IN (${marks})`
+      ).bind(...phones).all();
+
+      // 109 numbers in these two counties are shared by more than one licence,
+      // so a phone hit is a strong hint and not a proof. When a number is
+      // ambiguous, report it as unmatched WITH the tied rows as candidates
+      // rather than silently picking the first.
+      const hits = new Map();
+      for (const r of results || []) {
+        if (!hits.has(r.phone_digits)) hits.set(r.phone_digits, []);
+        hits.get(r.phone_digits).push(r);
+      }
+      for (const [p, rows] of hits) {
+        for (const b of byPhone.get(p) || []) {
+          out.set(b.placeId, rows.length === 1
+            ? shape(rows[0])
+            : { ...EMPTY_LICENSE, status: "AMBIGUOUS", candidates: rows.map(brief) });
+        }
+      }
+    }
+
+    // Anything still unmatched: offer name-similar licences for a person to
+    // judge. NOT auto-selected -- a wrong match would mark an unlicensed
+    // business as verified, which is the exact error this exists to prevent.
+    // Word order is no help: the CRM says "Josh Jensen Painting" and CSLB says
+    // "JENSEN JOSH PAINTING".
+    for (const b of businesses) {
+      const cur = out.get(b.placeId);
+      if (cur.licenseNo || cur.candidates.length) continue;
+      const words = String(b.businessName || "")
+        .split(/[^A-Za-z]+/)
+        .filter((w) => w.length > 2 && !LICENSE_STOPWORDS.has(w.toLowerCase()));
+      if (!words.length) continue;
+      const where = words.map(() => "business_name LIKE ?").join(" OR ");
+      const { results } = await db.prepare(
+        `SELECT license_no, business_name, city, primary_status, secondary_status,
+                classifications, expiration_date
+           FROM licenses WHERE ${where} ORDER BY business_name LIMIT 5`
+      ).bind(...words.map((w) => `%${w.toUpperCase()}%`)).all();
+      out.set(b.placeId, {
+        ...EMPTY_LICENSE,
+        status: (results || []).length ? "UNMATCHED" : "NOT ACTIVE",
+        candidates: (results || []).map(brief),
+      });
+    }
+  } catch (err) {
+    // Never let this cost a paid Places search.
+    console.error("licence lookup failed:", err && err.message);
+  }
+  return out;
+}
+
+function shape(r) {
+  return {
+    licenseNo: r.license_no,
+    status: r.primary_status || null,
+    secondary: r.secondary_status || null,
+    classes: r.classifications || null,
+    expiration: r.expiration_date || null,
+    bondCancel: r.bond_cancellation || null,
+    licenseName: r.business_name || null,
+    candidates: [],
+  };
+}
+
+function brief(r) {
+  return {
+    licenseNo: r.license_no, name: r.business_name, city: r.city || null,
+    status: r.primary_status, secondary: r.secondary_status || null,
+    classes: r.classifications, expiration: r.expiration_date,
+  };
+}

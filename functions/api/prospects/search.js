@@ -16,6 +16,7 @@ import {
   computeScore,
   tierFor,
   runWithConcurrency,
+  lookupLicenses,
 } from "../_lib/prospecting.js";
 
 const MAX_RESULTS_PER_SEARCH = 10;
@@ -123,21 +124,35 @@ export async function onRequestPost({ request, env }) {
       };
     });
 
+    // Step 0, done for the whole page in one D1 query. This is a database read,
+    // not a fetch, so it adds no Places subrequests and no meaningful latency.
+    // It cannot throw — see lookupLicenses — because a licence lookup must
+    // never cost a search that has already been paid for.
+    const licenses = await lookupLicenses(env.DB, prospects);
+
     if (prospects.length > 0) {
       const stmt = env.DB.prepare(`
         INSERT INTO prospects (
           id, place_id, business_name, trade, search_location, address, phone, email,
           website, rating, review_count, business_status, google_maps_url, gbp_status,
-          website_check, manual_signals, score, tier, outreach_stage
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          website_check, manual_signals, score, tier, outreach_stage,
+          license_no, license_status, license_secondary, license_classes,
+          license_expiration, license_bond_cancel, license_name, license_candidates
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       `);
-      const batch = prospects.map((p) => stmt.bind(
-        p.id, p.placeId, p.businessName, p.trade, p.searchLocation, p.address, p.phone, p.email,
-        p.website, p.rating, p.reviewCount, p.businessStatus, p.googleMapsUrl, p.gbpStatus,
-        JSON.stringify(p.websiteCheck),
-        JSON.stringify({ runsAds: false, growthIntent: false, ownerOperated: false }),
-        p.score, p.tier, "New"
-      ));
+      const batch = prospects.map((p) => {
+        const lic = licenses.get(p.placeId) || {};
+        return stmt.bind(
+          p.id, p.placeId, p.businessName, p.trade, p.searchLocation, p.address, p.phone, p.email,
+          p.website, p.rating, p.reviewCount, p.businessStatus, p.googleMapsUrl, p.gbpStatus,
+          JSON.stringify(p.websiteCheck),
+          JSON.stringify({ runsAds: false, growthIntent: false, ownerOperated: false }),
+          p.score, p.tier, "New",
+          lic.licenseNo ?? null, lic.status ?? "UNMATCHED", lic.secondary ?? null,
+          lic.classes ?? null, lic.expiration ?? null, lic.bondCancel ?? null,
+          lic.licenseName ?? null, JSON.stringify(lic.candidates || [])
+        );
+      });
       await env.DB.batch(batch);
     }
 
