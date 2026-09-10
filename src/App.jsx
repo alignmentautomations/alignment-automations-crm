@@ -216,7 +216,17 @@ const PACKAGE_ACCOUNTS = {
 // ─── Prospecting (from the outreach playbook) ───────────────────────────────────
 
 // Ideal-prospect trades from the playbook, in fit order.
-const INDUSTRIES = ["Painting", "HVAC", "Roofing", "Plumbing", "Electrical", "Landscaping / Lawn", "Other"];
+// ⚠ THREE LISTS MUST STAY IN SYNC when a trade is added or removed:
+//   1. INDUSTRIES        — here, the CRM's own industry dropdown
+//   2. PROSPECT_TRADES    — below, the Places query values
+//   3. INDUSTRY_MAP       — functions/api/_lib/prospecting.js, trade -> industry
+// Miss one and a pushed prospect lands with an industry the CRM cannot display.
+const INDUSTRIES = [
+  "Painting", "HVAC", "Roofing", "Plumbing", "Electrical", "Landscaping / Lawn",
+  "General Building", "Remodeling", "Flooring", "Tile & Stone", "Concrete",
+  "Cabinetry", "Masonry", "Pools & Spas", "Fencing", "Tree Service",
+  "Other",
+];
 
 // Where the lead was found (playbook prospecting sources).
 const LEAD_SOURCES = ["Google Maps", "Google Business Profile", "Facebook / Groups", "Facebook Ad Library", "Referral", "Website form", "Other"];
@@ -233,14 +243,43 @@ const getPriority = id => PRIORITIES.find(p => p.id === id);
 // distinct from INDUSTRIES (the CRM's display labels, which include "Other"
 // with no Places query equivalent). Matches INDUSTRY_MAP in
 // functions/api/_lib/prospecting.js.
+// The value is the phrase sent to Google Places ("{trade} in {location}"), NOT a
+// CSLB classification — the prospector searches Google, not the licence board.
+// Counts below are ACTIVE, unexpired, unflagged licences in San Luis Obispo +
+// Santa Barbara counties, measured from the `licenses` table on 2026-09-09;
+// they are why these trades were chosen and others were not.
 const PROSPECT_TRADES = [
-  { value: "painter", label: "Painter" },
-  { value: "hvac contractor", label: "HVAC contractor" },
-  { value: "roofer", label: "Roofer" },
-  { value: "plumber", label: "Plumber" },
-  { value: "electrician", label: "Electrician" },
-  { value: "landscaper", label: "Landscaper / lawn care" },
+  // The original six.
+  { value: "painter", label: "Painter" },                          // C-33, 518
+  { value: "hvac contractor", label: "HVAC contractor" },           // C-20, 165
+  { value: "roofer", label: "Roofer" },                             // C-39, 127
+  { value: "plumber", label: "Plumber" },                           // C-36, 465
+  { value: "electrician", label: "Electrician" },                   // C-10, 593
+  { value: "landscaper", label: "Landscaper / lawn care" },         // C-27, 460
+  // Added 2026-09-09. Chosen for fit with the spec-build method: homeowner- or
+  // facility-facing, visual enough that photographs can carry a page, and a
+  // ticket size where a $950 site is obviously worth it.
+  { value: "general contractor", label: "General contractor" },     // B, 2670
+  { value: "home remodeler", label: "Home remodeler" },             // B / B-2
+  { value: "flooring contractor", label: "Flooring" },              // C-15, 186
+  { value: "tile contractor", label: "Tile & stone" },              // C-54, 174
+  { value: "concrete contractor", label: "Concrete & patios" },     // C-8, 156
+  { value: "cabinet maker", label: "Cabinets & millwork" },         // C-6, 142
+  { value: "masonry contractor", label: "Masonry" },                // C-29, 65
+  { value: "swimming pool contractor", label: "Swimming pools" },   // C-53, 58
+  { value: "fence contractor", label: "Fencing" },                  // C-13, 51
+  { value: "tree service", label: "Tree service" },                 // D-49 76 + C-49 13
 ];
+// DELIBERATELY NOT HERE, and the reasons are worth keeping:
+//   Solar (C-46, 20)  — tiny pool, and the trade is dominated by heavy
+//                       advertisers. A $950 site is not their gap.
+//   B-2 (25)          — too few to be its own category, and nearly all of them
+//                       hold a B as well. Covered by "home remodeler".
+//   A General Engineering (486), C-9 Drywall (95), C-7 Low Voltage (94),
+//   C-12 Earthwork (80), C-16 Fire Protection (51) — sub-to-GC or commercial.
+//   Nobody searches Google for them.
+//   ⚠ Tree work is mostly D-49 (76), NOT C-49 (13). Confirmed by reading the
+//   business names: C-49 returns arborists, D-49 returns tree services.
 
 // Forces an unambiguous "City, ST" query to the Places API — a bare city name
 // or a 2-letter fragment (e.g. "sa") can resolve to a same-named place in a

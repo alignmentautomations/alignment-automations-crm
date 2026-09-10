@@ -408,6 +408,10 @@ export function deriveAutoSignals({ website, websiteCheck, phone, email }) {
 
 // ─── Prospect -> clinic mapping (lib/crm.js), now a same-DB insert ────────
 
+// ⚠ KEEP IN SYNC with PROSPECT_TRADES and INDUSTRIES in src/App.jsx. The keys
+// are the Places query phrases; the values must exist in INDUSTRIES or a pushed
+// prospect lands with an industry the CRM's dropdown cannot show. Anything
+// unmapped falls through to "Other" rather than throwing -- see mapIndustry.
 const INDUSTRY_MAP = {
   painter: "Painting",
   "hvac contractor": "HVAC",
@@ -415,6 +419,16 @@ const INDUSTRY_MAP = {
   plumber: "Plumbing",
   electrician: "Electrical",
   landscaper: "Landscaping / Lawn",
+  "general contractor": "General Building",
+  "home remodeler": "Remodeling",
+  "flooring contractor": "Flooring",
+  "tile contractor": "Tile & Stone",
+  "concrete contractor": "Concrete",
+  "cabinet maker": "Cabinetry",
+  "masonry contractor": "Masonry",
+  "swimming pool contractor": "Pools & Spas",
+  "fence contractor": "Fencing",
+  "tree service": "Tree Service",
 };
 
 const PRIORITY_MAP = {
