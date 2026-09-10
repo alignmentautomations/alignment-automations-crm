@@ -398,11 +398,14 @@ const prospectsDb = {
     if (!res.ok) throw new Error(await res.text());
     return await res.json();
   },
-  async search(trade, location) {
+  // `replace` clears the list first. A single-city search is a run of one and
+  // still replaces; a county sweep replaces on its first town only, so results
+  // accumulate and can be deduped across the whole county.
+  async search(trade, location, opts = {}) {
     const res = await apiFetch(`/prospects/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trade, location }),
+      body: JSON.stringify({ trade, location, ...opts }),
     });
     const data = await res.json();
     // Errors come back as 200 with an `error` field, not a non-2xx status —
@@ -410,6 +413,21 @@ const prospectsDb = {
     // responses, which would hide the real message from the user.
     if (!res.ok || data.error) throw new Error(data.error || "Search failed");
     return data;
+  },
+  // The towns in a county, ranked by how many licensed contractors are in each.
+  // Comes from the `licenses` table, so it is CSLB's own list and nobody has to
+  // maintain it by hand.
+  async cities(county) {
+    const res = await apiFetch(`/prospects/cities?county=${encodeURIComponent(county)}`);
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || "Could not load cities");
+    return data.cities || [];
+  },
+  async counties() {
+    const res = await apiFetch(`/prospects/cities`);
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || "Could not load counties");
+    return data.counties || [];
   },
   async update(id, patch) {
     const res = await apiFetch(`/prospects/${id}`, {
@@ -2854,7 +2872,14 @@ function ProspectingView({ onToast, onPushed }) {
   const [trade, setTrade] = useState(PROSPECT_TRADES[0].value);
   const [city, setCity] = useState("");
   const [usState, setUsState] = useState("");
+  const [scope, setScope] = useState("city");        // "city" | "county"
+  const [county, setCounty] = useState("");
+  const [counties, setCounties] = useState([]);
   const [searching, setSearching] = useState(false);
+  // Set while a county sweep is running so the loop can be stopped between
+  // towns. A sweep is ~18 Places searches; being unable to stop it would be
+  // the difference between a useful feature and an expensive one.
+  const stopRef = useRef(false);
   const [searchStatus, setSearchStatus] = useState("");
   const [search, setSearch] = useState("");
   const [tierFilter, setTierFilter] = useState("all");
@@ -2863,10 +2888,72 @@ function ProspectingView({ onToast, onPushed }) {
 
   useEffect(() => {
     prospectsDb.getAll().then(setProspects).catch(() => {}).finally(() => setLoading(false));
+    // Only counties the licence table actually holds are offered, so the UI
+    // can never present one with no data behind it.
+    prospectsDb.counties().then(setCounties).catch(() => {});
   }, []);
+
+  // A county sweep is the same search run once per town, driven from here
+  // rather than from the server. One server-side sweep would be ~18 Places
+  // calls plus two fetches per result -- 350+ subrequests inside a single Pages
+  // Function, against the ceiling search.js already warns about. Looping in the
+  // browser keeps every request exactly the size it is today, shows progress
+  // town by town, and can be stopped part-way.
+  const handleCountySweep = async () => {
+    if (!trade || !county) return;
+    setSearching(true);
+    stopRef.current = false;
+    setSearchStatus(`Loading towns in ${county}…`);
+    try {
+      const towns = await prospectsDb.cities(county);
+      if (!towns.length) {
+        setSearchStatus(`No towns on file for ${county}.`);
+        return;
+      }
+      let added = 0, dupes = 0, contacted = 0, done = 0;
+      for (const t of towns) {
+        if (stopRef.current) break;
+        const location = `${t.city}, CA`;
+        setSearchStatus(
+          `${county}: ${t.city} (${done + 1} of ${towns.length}) — ` +
+          `${added} new so far. Click Stop to end the sweep.`
+        );
+        try {
+          // Replace on the first town only; accumulate across the rest.
+          const data = await prospectsDb.search(trade, location, { replace: done === 0 });
+          added += data.added || 0;
+          dupes += data.alreadyListed || 0;
+          contacted += data.alreadyContacted || 0;
+        } catch (err) {
+          // One bad town must not end the sweep -- a Places hiccup on Cayucos
+          // should not cost the other seventeen.
+          console.error("sweep failed for", location, err.message);
+        }
+        done++;
+        const fresh = await prospectsDb.getAll();
+        setProspects(fresh);
+      }
+      const stopped = stopRef.current ? " (stopped early)" : "";
+      const skipNote = [
+        dupes > 0 ? `${dupes} already on the list` : "",
+        contacted > 0 ? `${contacted} already contacted` : "",
+      ].filter(Boolean).join(", ");
+      setSearchStatus(
+        `${county}: ${added} prospect(s) from ${done} town(s)${stopped}.` +
+        (skipNote ? ` Skipped ${skipNote}.` : "")
+      );
+      setExpandedId(null);
+    } catch (err) {
+      setSearchStatus(`Error: ${err.message}`);
+    } finally {
+      setSearching(false);
+      stopRef.current = false;
+    }
+  };
 
   const handleSearch = async e => {
     e.preventDefault();
+    if (scope === "county") return handleCountySweep();
     if (!trade || !city.trim() || !usState) return;
     const location = `${city.trim()}, ${usState}`;
     setSearching(true);
@@ -2879,7 +2966,14 @@ function ProspectingView({ onToast, onPushed }) {
       } else if (data.skipped > 0) {
         setSearchStatus(`Found ${data.added} prospect(s) — top ${data.added} of ${data.added + data.skipped} matches${thinNote}.`);
       } else {
-        setSearchStatus(`Found ${data.added} prospect(s)${thinNote}.`);
+        const skipNote = [
+          data.alreadyListed > 0 ? `${data.alreadyListed} already on the list` : "",
+          data.alreadyContacted > 0 ? `${data.alreadyContacted} already contacted` : "",
+        ].filter(Boolean).join(", ");
+        setSearchStatus(
+          `Found ${data.added} prospect(s)${thinNote}.` +
+          (skipNote ? ` Skipped ${skipNote}.` : "")
+        );
       }
       const fresh = await prospectsDb.getAll();
       setProspects(fresh);
@@ -2986,13 +3080,50 @@ function ProspectingView({ onToast, onPushed }) {
           <select className="form-select" value={trade} onChange={e => setTrade(e.target.value)}>
             {PROSPECT_TRADES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
-          <input className="form-input" placeholder="City, e.g. San Luis Obispo" value={city} onChange={e => setCity(e.target.value)} />
-          <select className="form-select" value={usState} onChange={e => setUsState(e.target.value)}>
-            <option value="">State…</option>
-            {US_STATES.map(([abbr, name]) => <option key={abbr} value={abbr}>{name}</option>)}
+          <select className="form-select" value={scope} onChange={e => setScope(e.target.value)}>
+            <option value="city">One city</option>
+            <option value="county">Whole county</option>
           </select>
-          <button className="btn-primary" type="submit" disabled={searching || !city.trim() || !usState}>{searching ? "Searching…" : "Search"}</button>
+          {scope === "city" ? (
+            <>
+              <input className="form-input" placeholder="City, e.g. San Luis Obispo" value={city} onChange={e => setCity(e.target.value)} />
+              <select className="form-select" value={usState} onChange={e => setUsState(e.target.value)}>
+                <option value="">State…</option>
+                {US_STATES.map(([abbr, name]) => <option key={abbr} value={abbr}>{name}</option>)}
+              </select>
+            </>
+          ) : (
+            // Only counties present in the `licenses` table are offered, and the
+            // town list behind each one is CSLB's, not a hand-kept list.
+            <select className="form-select" value={county} onChange={e => setCounty(e.target.value)}>
+              <option value="">County…</option>
+              {counties.map(c => (
+                <option key={c.county} value={c.county}>
+                  {c.county} ({c.cities} towns)
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            className="btn-primary"
+            type="submit"
+            disabled={searching || (scope === "city" ? (!city.trim() || !usState) : !county)}
+          >
+            {searching ? "Searching…" : scope === "county" ? "Sweep county" : "Search"}
+          </button>
+          {searching && scope === "county" && (
+            <button className="btn-ghost" type="button" onClick={() => { stopRef.current = true; }}>
+              Stop
+            </button>
+          )}
         </form>
+        {scope === "county" && !searching && (
+          <div className="page-subtitle" style={{ marginBottom: 12 }}>
+            One Places search per town, so a county costs roughly 18&times; a single
+            city search. Results accumulate and are deduped; anything already in
+            the pipeline is skipped.
+          </div>
+        )}
         {searchStatus && <div className="page-subtitle" style={{ marginBottom: 12 }}>{searchStatus}</div>}
 
         <div className="toolbar">

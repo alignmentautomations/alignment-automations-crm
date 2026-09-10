@@ -17,6 +17,7 @@ import {
   tierFor,
   runWithConcurrency,
   lookupLicenses,
+  phoneDigits,
 } from "../_lib/prospecting.js";
 
 const MAX_RESULTS_PER_SEARCH = 10;
@@ -42,7 +43,11 @@ const THIN_REVIEW_COUNT = 10;
 
 export async function onRequestPost({ request, env }) {
   try {
-    const { trade, location } = await request.json();
+    // `replace` and `excludeContacted` support the county sweep: the browser
+    // loops the towns in a county and calls this once per town, so the table
+    // must be cleared on the FIRST call only and accumulate after that.
+    // Defaults keep a plain single-city search behaving exactly as before.
+    const { trade, location, replace = true, excludeContacted = true } = await request.json();
     if (!trade || !location) {
       return new Response(JSON.stringify({ error: "trade and location are required" }), {
         status: 400, headers: { "Content-Type": "application/json" },
@@ -84,15 +89,45 @@ export async function onRequestPost({ request, env }) {
     const thinRank = (r) => ((r.reviewCount || 0) < THIN_REVIEW_COUNT ? 1 : 0);
     results.sort((a, b) => siteRank(a) - siteRank(b) || thinRank(a) - thinRank(b));
 
-    // The prospect list is a per-search scratchpad, not an archive: each search
-    // replaces the previous list entirely. Anything worth keeping gets pushed
-    // to the pipeline (clinics table) before the next search.
-    await env.DB.prepare("DELETE FROM prospects").run();
+    // The prospect list is a per-RUN scratchpad, not an archive. A single-city
+    // search is a run of one, so it still clears the table; a county sweep
+    // clears on its first town and accumulates across the rest.
+    if (replace) await env.DB.prepare("DELETE FROM prospects").run();
 
-    const newResults = results.slice(0, MAX_RESULTS_PER_SEARCH);
-    // With the table cleared, "skipped" now means matches beyond the per-search
-    // cap, not duplicates.
-    const skipped = results.length - newResults.length;
+    // Two things get filtered out before the expensive website check, because
+    // both were producing the "lots of repeat prospects" complaint:
+    //
+    //   1. place_ids already in the table. Neighbouring towns overlap heavily --
+    //      Grover Beach and Arroyo Grande are three miles apart, so Places
+    //      returns many of the same businesses for both.
+    //   2. businesses already in `clinics`, i.e. already contacted. Those are
+    //      not prospects at all. Matched on phone, normalized to ten digits,
+    //      because the same business is rarely spelled the same way twice.
+    const seen = new Set();
+    {
+      const { results: rows } = await env.DB.prepare(
+        "SELECT place_id FROM prospects WHERE place_id IS NOT NULL"
+      ).all();
+      for (const r of rows || []) seen.add(r.place_id);
+    }
+    const contacted = new Set();
+    if (excludeContacted) {
+      const { results: rows } = await env.DB.prepare(
+        "SELECT contact_phone FROM clinics WHERE contact_phone IS NOT NULL"
+      ).all();
+      for (const r of rows || []) {
+        const d = phoneDigits(r.contact_phone);
+        if (d.length === 10) contacted.add(d);
+      }
+    }
+
+    const fresh = results.filter((r) => !seen.has(r.placeId));
+    const alreadyListed = results.length - fresh.length;
+    const notContacted = fresh.filter((r) => !contacted.has(phoneDigits(r.phone)));
+    const alreadyContacted = fresh.length - notContacted.length;
+
+    const newResults = notContacted.slice(0, MAX_RESULTS_PER_SEARCH);
+    const skipped = notContacted.length - newResults.length;
 
     const prospects = await runWithConcurrency(newResults, CONCURRENCY, async (result) => {
       const websiteCheck = await checkWebsite(result.website);
@@ -132,7 +167,7 @@ export async function onRequestPost({ request, env }) {
 
     if (prospects.length > 0) {
       const stmt = env.DB.prepare(`
-        INSERT INTO prospects (
+        INSERT OR IGNORE INTO prospects (
           id, place_id, business_name, trade, search_location, address, phone, email,
           website, rating, review_count, business_status, google_maps_url, gbp_status,
           website_check, manual_signals, score, tier, outreach_stage,
@@ -160,7 +195,10 @@ export async function onRequestPost({ request, env }) {
     // result (homepage + 1 contact-page fallback if no email found on it).
     const subrequestsApprox = 1 + prospects.length * 2;
 
-    return new Response(JSON.stringify({ added: prospects.length, skipped, thinReviewCount, subrequestsApprox }), {
+    return new Response(JSON.stringify({
+      added: prospects.length, skipped, thinReviewCount, subrequestsApprox,
+      alreadyListed, alreadyContacted, location,
+    }), {
       status: 200, headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
