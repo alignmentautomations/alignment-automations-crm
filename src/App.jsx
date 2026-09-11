@@ -14,7 +14,10 @@ const PIPELINE_STAGES = [
   { id:"demo_booked",       label:"Demo Scheduled",   color:"#f59e0b", group:"prospects" },
   { id:"demo_done",         label:"Demo Complete",    color:"#a78bfa", group:"prospects" },
   { id:"yes_closed_won",    label:"Won",              color:"#10b981", group:"prospects" },
-  { id:"closed_lost",       label:"Lost",             color:"#ef4444", group:"prospects" },
+  // `closed` = finished with, so it drops out of the Businesses working list.
+  // Lost still shows ON the Pipeline board, because a lost deal is a real
+  // outcome worth seeing there; it just should not sit in the day-to-day list.
+  { id:"closed_lost",       label:"Lost",             color:"#ef4444", group:"prospects", closed:true },
   // Screened out before any outreach - a bad rating, too few reviews, a licence
   // flag, or already marketed. NOT the same as "Lost", which means we pitched
   // and they said no.
@@ -23,13 +26,17 @@ const PIPELINE_STAGES = [
   // the Businesses filter. Adding it here without that flag put a Disqualified
   // ROW inside the Prospects group and counted it in the group total - hiding
   // them from one view and making them louder in another.
-  { id:"disqualified",      label:"Disqualified",     color:"#64748b", group:"prospects", hidden:true },
+  { id:"disqualified",      label:"Disqualified",     color:"#64748b", group:"prospects", hidden:true, closed:true },
   { id:"onboarding_sent",   label:"Onboarding",       color:"#3b82f6", group:"clients"   },
   { id:"build_in_progress", label:"Building",         color:"#8b5cf6", group:"clients"   },
   { id:"testing",           label:"Transfer & Setup", color:"#f97316", group:"clients"   },
   { id:"live",              label:"Live",             color:"#10b981", group:"clients"   },
   { id:"monthly_support",   label:"Monthly Support",  color:"#06b6d4", group:"clients"   },
 ];
+
+// Stages that mean "finished with". Derived from PIPELINE_STAGES so a new
+// closed stage only has to be flagged in one place.
+const CLOSED_STAGES = new Set(PIPELINE_STAGES.filter(s => s.closed).map(s => s.id));
 
 const STATUS_COLORS = {
   lead:              { bg:"rgba(148,163,184,0.15)", text:"#94a3b8", border:"rgba(148,163,184,0.4)" },
@@ -2021,10 +2028,10 @@ function DashboardView({ clinics, sequences, onAdd, onEdit, onDelete, onSelect, 
   const filtered = clinics.filter(c => {
     const q = search.toLowerCase();
     const ms = !q || c.name.toLowerCase().includes(q) || (c.contact_name||"").toLowerCase().includes(q) || (c.contact_email||"").toLowerCase().includes(q);
-    // "All" means all ACTIVE businesses. Disqualified rows were screened out
-    // before any outreach and would otherwise sit in the list and the New Lead
-    // column forever; pick "Disqualified" from the filter to see them.
-    return ms && (filter === "all" ? c.status !== "disqualified" : c.status === filter);
+    // "All" means all ACTIVE businesses. Anything on a `closed` stage is
+    // finished with - screened out, or pitched and lost - and would otherwise
+    // sit in this list forever. Pick that stage from the filter to see them.
+    return ms && (filter === "all" ? !CLOSED_STAGES.has(c.status) : c.status === filter);
   });
 
   return (
@@ -2033,7 +2040,9 @@ function DashboardView({ clinics, sequences, onAdd, onEdit, onDelete, onSelect, 
         <div>
           <div className="page-title">Businesses</div>
           <div className="page-subtitle">
-            {clinics.length} total &middot; {clinics.filter(c => (c.followUps||[]).some(f => f.status === "active")).length} with active follow-ups
+            {clinics.filter(c => !CLOSED_STAGES.has(c.status)).length} active &middot; {clinics.filter(c => (c.followUps||[]).some(f => f.status === "active")).length} with active follow-ups
+            {clinics.filter(c => CLOSED_STAGES.has(c.status)).length > 0 &&
+              <> &middot; {clinics.filter(c => CLOSED_STAGES.has(c.status)).length} closed out</>}
           </div>
         </div>
         <button className="btn-primary header-add-btn" onClick={onAdd}><Ic.Plus /> Add Business</button>
