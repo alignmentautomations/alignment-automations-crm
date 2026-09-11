@@ -17,8 +17,13 @@ const PIPELINE_STAGES = [
   { id:"closed_lost",       label:"Lost",             color:"#ef4444", group:"prospects" },
   // Screened out before any outreach - a bad rating, too few reviews, a licence
   // flag, or already marketed. NOT the same as "Lost", which means we pitched
-  // and they said no. Hidden from the Businesses list unless filtered for.
-  { id:"disqualified",      label:"Disqualified",     color:"#64748b", group:"prospects" },
+  // and they said no.
+  //
+  // `hidden` keeps it OUT of the Pipeline board while leaving it selectable in
+  // the Businesses filter. Adding it here without that flag put a Disqualified
+  // ROW inside the Prospects group and counted it in the group total - hiding
+  // them from one view and making them louder in another.
+  { id:"disqualified",      label:"Disqualified",     color:"#64748b", group:"prospects", hidden:true },
   { id:"onboarding_sent",   label:"Onboarding",       color:"#3b82f6", group:"clients"   },
   { id:"build_in_progress", label:"Building",         color:"#8b5cf6", group:"clients"   },
   { id:"testing",           label:"Transfer & Setup", color:"#f97316", group:"clients"   },
@@ -2162,7 +2167,9 @@ function PipelineView({ clinics, sequences, onSelect, onStatusChange, onOpenLaun
       <div className="main-content">
         <div className="pipeline-list">
           {PIPELINE_GROUPS.map((group, gi) => {
-            const groupStages = PIPELINE_STAGES.filter(s => s.group === group.id);
+            // `!s.hidden` keeps screened-out businesses off the board entirely -
+            // no row, and not counted in the group total either.
+            const groupStages = PIPELINE_STAGES.filter(s => s.group === group.id && !s.hidden);
             const groupTotal  = clinics.filter(c => groupStages.some(s => s.id === c.status)).length;
             return (
               <div key={group.id} style={{ marginBottom: gi < PIPELINE_GROUPS.length - 1 ? 28 : 0 }}>
@@ -2934,6 +2941,7 @@ function ProspectingView({ onToast, onPushed }) {
   const [searchStatus, setSearchStatus] = useState("");
   const [search, setSearch] = useState("");
   const [tierFilter, setTierFilter] = useState("all");
+  const [showPushed, setShowPushed] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [bulkPushing, setBulkPushing] = useState(false);
 
@@ -3103,15 +3111,21 @@ function ProspectingView({ onToast, onPushed }) {
     }
   };
 
+  // Already-pushed prospects live in the pipeline now, so leaving them here
+  // shows the same business in two lists and reads as duplication. Hidden by
+  // default; the toggle below brings them back.
+  const pushedCount = prospects.filter(p => p.pushed_clinic_id).length;
+
   const filtered = prospects.filter(p => {
     const q = search.toLowerCase();
     const matchesSearch = !q || p.business_name.toLowerCase().includes(q);
     const matchesTier = tierFilter === "all" || p.tier === tierFilter;
-    return matchesSearch && matchesTier;
+    const matchesPushed = showPushed || !p.pushed_clinic_id;
+    return matchesSearch && matchesTier && matchesPushed;
   });
 
-  const hotCount = prospects.filter(p => p.tier === "Record today").length;
-  const warmCount = prospects.filter(p => p.tier === "Warm").length;
+  const hotCount = prospects.filter(p => !p.pushed_clinic_id && p.tier === "Record today").length;
+  const warmCount = prospects.filter(p => !p.pushed_clinic_id && p.tier === "Warm").length;
 
   return (
     <>
@@ -3119,7 +3133,7 @@ function ProspectingView({ onToast, onPushed }) {
         <div>
           <div className="page-title">Prospecting</div>
           <div className="page-subtitle">
-            {loading ? "Loading…" : `${prospects.length} total · ${hotCount} record today · ${warmCount} warm`}
+            {loading ? "Loading…" : `${prospects.length - pushedCount} not yet pushed · ${hotCount} record today · ${warmCount} warm${pushedCount ? ` · ${pushedCount} already in the pipeline` : ""}`}
           </div>
         </div>
         <button className="btn-primary header-add-btn" onClick={handleBulkPush} disabled={bulkPushing || loading}>
@@ -3188,6 +3202,11 @@ function ProspectingView({ onToast, onPushed }) {
             <option value="Warm">Warm</option>
             <option value="Park it">Park it</option>
           </select>
+          {pushedCount > 0 && (
+            <button className="btn-ghost" type="button" onClick={() => setShowPushed(v => !v)}>
+              {showPushed ? `Hide ${pushedCount} already pushed` : `Show ${pushedCount} already pushed`}
+            </button>
+          )}
           <button className="btn-ghost" type="button" onClick={handleExportCsv}>Export CSV</button>
         </div>
 
