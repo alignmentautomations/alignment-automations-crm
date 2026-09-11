@@ -15,6 +15,10 @@ const PIPELINE_STAGES = [
   { id:"demo_done",         label:"Demo Complete",    color:"#a78bfa", group:"prospects" },
   { id:"yes_closed_won",    label:"Won",              color:"#10b981", group:"prospects" },
   { id:"closed_lost",       label:"Lost",             color:"#ef4444", group:"prospects" },
+  // Screened out before any outreach - a bad rating, too few reviews, a licence
+  // flag, or already marketed. NOT the same as "Lost", which means we pitched
+  // and they said no. Hidden from the Businesses list unless filtered for.
+  { id:"disqualified",      label:"Disqualified",     color:"#64748b", group:"prospects" },
   { id:"onboarding_sent",   label:"Onboarding",       color:"#3b82f6", group:"clients"   },
   { id:"build_in_progress", label:"Building",         color:"#8b5cf6", group:"clients"   },
   { id:"testing",           label:"Transfer & Setup", color:"#f97316", group:"clients"   },
@@ -33,12 +37,14 @@ const STATUS_COLORS = {
   live:              { bg:"rgba(16,185,129,0.15)",  text:"#10b981", border:"rgba(16,185,129,0.4)"  },
   monthly_support:   { bg:"rgba(6,182,212,0.15)",   text:"#06b6d4", border:"rgba(6,182,212,0.4)"   },
   closed_lost:       { bg:"rgba(239,68,68,0.15)",   text:"#ef4444", border:"rgba(239,68,68,0.4)"   },
+  disqualified:      { bg:"rgba(100,116,139,0.15)", text:"#64748b", border:"rgba(100,116,139,0.4)" },
 };
 
 const STAGE_DOT = {
   lead:"#94a3b8", demo_booked:"#f59e0b", demo_done:"#a78bfa", yes_closed_won:"#10b981",
   onboarding_sent:"#3b82f6", build_in_progress:"#8b5cf6", testing:"#f97316",
   live:"#10b981", monthly_support:"#06b6d4", closed_lost:"#ef4444",
+  disqualified:"#64748b",
 };
 
 // Client Onboarding doc, hosted for linking from the client_won email.
@@ -2010,7 +2016,10 @@ function DashboardView({ clinics, sequences, onAdd, onEdit, onDelete, onSelect, 
   const filtered = clinics.filter(c => {
     const q = search.toLowerCase();
     const ms = !q || c.name.toLowerCase().includes(q) || (c.contact_name||"").toLowerCase().includes(q) || (c.contact_email||"").toLowerCase().includes(q);
-    return ms && (filter === "all" || c.status === filter);
+    // "All" means all ACTIVE businesses. Disqualified rows were screened out
+    // before any outreach and would otherwise sit in the list and the New Lead
+    // column forever; pick "Disqualified" from the filter to see them.
+    return ms && (filter === "all" ? c.status !== "disqualified" : c.status === filter);
   });
 
   return (
@@ -2777,7 +2786,10 @@ const AUTO_SIGNAL_LABELS = {
   inTargetTrade: "In target trade +1",
 };
 
-const OUTREACH_STAGES = ["New", "Sent", "Watched", "Replied", "Call booked", "Proposal sent", "Closed", "Dead"];
+// "Disqualified" and "Declined" were MISSING here while 20 rows already held
+// those values, so the select rendered with no matching option and a Save could
+// silently reassign the stage. Same class as the stale-save bug. Added 2026-09-11.
+const OUTREACH_STAGES = ["New", "Sent", "Watched", "Replied", "Call booked", "Proposal sent", "Closed", "Dead", "Disqualified", "Declined"];
 
 // Auto-signal display only — mirrors deriveAutoSignals in
 // functions/api/_lib/prospecting.js for the read-only signal chips.

@@ -3,7 +3,7 @@
 // same-database insert now, replacing the standalone local tool's
 // cross-app HTTP call to a separate CRM_API_URL.
 
-import { mapProspectToClinic } from "../../_lib/prospecting.js";
+import { mapProspectToClinic, phoneDigits } from "../../_lib/prospecting.js";
 
 export async function onRequestPost({ params, env }) {
   try {
@@ -24,6 +24,38 @@ export async function onRequestPost({ params, env }) {
       }), {
         status: 409, headers: { "Content-Type": "application/json" },
       });
+    }
+
+    // The `pushed_clinic_id` guard above only stops the SAME prospect row being
+    // pushed twice. It cannot stop the same BUSINESS arriving as two prospect
+    // rows -- Google carries duplicate listings with different place_ids, and
+    // the sweep's dedupe is on place_id -- which is how five duplicate clinics
+    // rows were created on 2026-09-10. So check the destination table too.
+    //
+    // This is the same exclusion `search.js` already applies, enforced at the
+    // point rows are actually created. It deliberately matches ANY stage:
+    // disqualified, declined, sent and won are all "already handled".
+    //
+    // NOTE: matched on phone only, like the search filter. A business whose
+    // listing phone differs from the stored contact_phone will still get
+    // through. Name + address matching is the real fix and is not this change.
+    const digits = phoneDigits(prospect.phone);
+    if (digits.length === 10) {
+      const { results: existing } = await env.DB.prepare(
+        "SELECT id, name, contact_phone, outreach_stage, status FROM clinics WHERE contact_phone IS NOT NULL"
+      ).all();
+      const clash = (existing || []).find((c) => phoneDigits(c.contact_phone) === digits);
+      if (clash) {
+        return new Response(JSON.stringify({
+          error: "That business is already in the pipeline",
+          clinicId: clash.id,
+          name: clash.name,
+          outreachStage: clash.outreach_stage,
+          status: clash.status,
+        }), {
+          status: 409, headers: { "Content-Type": "application/json" },
+        });
+      }
     }
 
     const prospectRow = { ...prospect, website_check: prospect.website_check ? JSON.parse(prospect.website_check) : {} };
