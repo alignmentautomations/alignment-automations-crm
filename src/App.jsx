@@ -2978,7 +2978,7 @@ function ProspectingView({ onToast, onPushed }) {
         setSearchStatus(`No towns on file for ${county}.`);
         return;
       }
-      let added = 0, dupes = 0, contacted = 0, done = 0;
+      let added = 0, dupes = 0, contacted = 0, done = 0, outOfArea = 0;
       for (const t of towns) {
         if (stopRef.current) break;
         const location = `${t.city}, CA`;
@@ -2992,6 +2992,7 @@ function ProspectingView({ onToast, onPushed }) {
           added += data.added || 0;
           dupes += data.alreadyListed || 0;
           contacted += data.alreadyContacted || 0;
+          outOfArea += data.droppedOutOfArea || 0;
         } catch (err) {
           // One bad town must not end the sweep -- a Places hiccup on Cayucos
           // should not cost the other seventeen.
@@ -3006,9 +3007,13 @@ function ProspectingView({ onToast, onPushed }) {
         dupes > 0 ? `${dupes} already on the list` : "",
         contacted > 0 ? `${contacted} already contacted` : "",
       ].filter(Boolean).join(", ");
+      // The sweep is where the out-of-area filter earns its keep -- it visits
+      // the small towns, which are exactly the ones Places pads out with
+      // statewide results. Reporting the total makes that visible.
+      const areaNote = outOfArea > 0 ? ` Dropped ${outOfArea} outside the service area.` : "";
       setSearchStatus(
         `${county}: ${added} prospect(s) from ${done} town(s)${stopped}.` +
-        (skipNote ? ` Skipped ${skipNote}.` : "")
+        (skipNote ? ` Skipped ${skipNote}.` : "") + areaNote
       );
       setExpandedId(null);
     } catch (err) {
@@ -3029,10 +3034,15 @@ function ProspectingView({ onToast, onPushed }) {
     try {
       const data = await prospectsDb.search(trade, location);
       const thinNote = data.thinReviewCount > 0 ? ` (${data.thinReviewCount} with under 10 reviews, ranked lower but kept)` : "";
+      // Out-of-area drops are reported, never silent. A small town's search can
+      // legitimately come back almost empty once Places' statewide filler is
+      // removed, and "No results" with no explanation looks like a broken
+      // search rather than a working filter.
+      const areaNote = data.droppedOutOfArea > 0 ? ` Dropped ${data.droppedOutOfArea} outside the service area.` : "";
       if (data.added === 0) {
-        setSearchStatus(`No results for "${trade} in ${location}"${thinNote}. Double-check the city spelling and try again.`);
+        setSearchStatus(`No results for "${trade} in ${location}"${thinNote}.${areaNote} Double-check the city spelling and try again.`);
       } else if (data.skipped > 0) {
-        setSearchStatus(`Found ${data.added} prospect(s) — top ${data.added} of ${data.added + data.skipped} matches${thinNote}.`);
+        setSearchStatus(`Found ${data.added} prospect(s) — top ${data.added} of ${data.added + data.skipped} matches${thinNote}.${areaNote}`);
       } else {
         const skipNote = [
           data.alreadyListed > 0 ? `${data.alreadyListed} already on the list` : "",
@@ -3040,7 +3050,7 @@ function ProspectingView({ onToast, onPushed }) {
         ].filter(Boolean).join(", ");
         setSearchStatus(
           `Found ${data.added} prospect(s)${thinNote}.` +
-          (skipNote ? ` Skipped ${skipNote}.` : "")
+          (skipNote ? ` Skipped ${skipNote}.` : "") + areaNote
         );
       }
       const fresh = await prospectsDb.getAll();

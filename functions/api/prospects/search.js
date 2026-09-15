@@ -65,7 +65,25 @@ export async function onRequestPost({ request, env }) {
     // looks nothing like its usual structured "API key not valid" error —
     // hard to diagnose without this.
     const apiKey = (env.GOOGLE_PLACES_API_KEY || "").trim();
-    const rawResults = await searchContractors({ trade, location, apiKey });
+
+    // The service area comes out of the `licenses` table, not a constant --
+    // the same source of truth the city list uses, so importing another
+    // county's CSLB export widens prospecting automatically with no code
+    // change. If the table is empty or the read fails, the set comes back
+    // empty and searchContractors skips the filter entirely, which restores
+    // the old behaviour rather than silently returning nothing.
+    let allowedCounties = new Set();
+    try {
+      const { results: rows } = await env.DB.prepare(
+        "SELECT DISTINCT county FROM licenses WHERE county IS NOT NULL AND county <> ''"
+      ).all();
+      for (const r of rows || []) allowedCounties.add(String(r.county).trim());
+    } catch (e) {
+      console.error("service-area lookup failed, filter disabled:", e.message);
+    }
+
+    const { results: rawResults, droppedOutOfArea, missingCounty } =
+      await searchContractors({ trade, location, apiKey, allowedCounties });
     // Nothing is excluded on review count. Every business Places returns stays
     // on the list; the ordering decides what makes the cap.
     const results = rawResults.slice();
@@ -198,6 +216,7 @@ export async function onRequestPost({ request, env }) {
     return new Response(JSON.stringify({
       added: prospects.length, skipped, thinReviewCount, subrequestsApprox,
       alreadyListed, alreadyContacted, location,
+      droppedOutOfArea, missingCounty,
     }), {
       status: 200, headers: { "Content-Type": "application/json" },
     });

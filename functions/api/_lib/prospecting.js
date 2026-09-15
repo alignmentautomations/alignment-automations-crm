@@ -31,12 +31,50 @@ const FIELD_MASK = [
 // component, which reliably carries a 2-letter code ("US", "GB", ...).
 const SEARCH_COUNTRY = "US";
 
-function countryOf(place) {
-  const c = (place.addressComponents || []).find((a) => (a.types || []).includes("country"));
-  return c ? c.shortText : null;
+function componentOf(place, type, field) {
+  const c = (place.addressComponents || []).find((a) => (a.types || []).includes(type));
+  return c ? c[field] : null;
 }
 
-export async function searchContractors({ trade, location, apiKey }) {
+function countryOf(place) {
+  return componentOf(place, "country", "shortText");
+}
+
+// ─── Service-area filter ───────────────────────────────────────────────────
+// ⚠⚠ ADDED 2026-09-14, after a 45-row flooring batch came back 34% junk.
+// Places Text Search is a RELEVANCE engine, not a geography filter, and
+// `${trade} in ${location}` fails in two distinct ways that both look normal:
+//
+//   1. TOWN-NAME COLLISIONS. "Santa Margarita, CA" returned four businesses in
+//      RANCHO Santa Margarita, 230 miles away in Orange County. "Los Osos"
+//      returned Los Banos. "Oceano" returned Oceanside.
+//   2. THIN-TOWN FALLBACK. When a small town has few businesses in the trade,
+//      Places fills the page from across the state to reach pageSize. "San
+//      Miguel, CA" alone returned Fresno, Roseville, Garden Grove, Lakeside,
+//      Laguna Niguel, Carmichael and San Diego.
+//
+// ⚠ The county sweep makes this WORSE, because it deliberately iterates the
+// small towns -- which are precisely the ones that produce garbage.
+//
+// Measured on the run that exposed it: 44 of 131 rows would never have been
+// created, saving ~88 website-check subrequests as a side effect.
+//
+// The allowed counties are NOT hardcoded -- they come from the `licenses`
+// table, the same source of truth the city list already uses, so the filter
+// widens automatically whenever a new county's CSLB export is imported.
+function countyOf(place) {
+  // Places spells it "San Luis Obispo County"; CSLB stores "San Luis Obispo".
+  const raw = componentOf(place, "administrative_area_level_2", "longText");
+  return raw ? raw.replace(/\s+County$/i, "").trim() : null;
+}
+
+function stateOf(place) {
+  return componentOf(place, "administrative_area_level_1", "shortText");
+}
+
+// `allowedCounties`: a Set of county names, or null/empty to disable the
+// filter entirely (which restores the old behaviour exactly).
+export async function searchContractors({ trade, location, apiKey, allowedCounties = null }) {
   if (!apiKey) {
     const err = new Error("Missing Google Places API key. Set GOOGLE_PLACES_API_KEY as a Pages secret.");
     err.code = "NO_API_KEY";
@@ -63,9 +101,30 @@ export async function searchContractors({ trade, location, apiKey }) {
   }
 
   const data = await res.json();
-  const places = (data.places || []).filter((p) => countryOf(p) === SEARCH_COUNTRY);
+  const inCountry = (data.places || []).filter((p) => countryOf(p) === SEARCH_COUNTRY);
 
-  return places.map((p) => ({
+  // ⚠ A place with NO county component is KEPT, not dropped, and counted
+  // separately. Silently discarding a valid local business because Google
+  // omitted a field is the worse failure of the two -- the whole point of this
+  // filter is to remove obvious out-of-area noise, not to be clever.
+  let droppedOutOfArea = 0;
+  let missingCounty = 0;
+  const useFilter = allowedCounties && allowedCounties.size > 0;
+
+  const places = inCountry.filter((p) => {
+    if (!useFilter) return true;
+    const county = countyOf(p);
+    if (!county) { missingCounty++; return true; }
+    // State is a cheap backstop, because county names repeat across states --
+    // there is a Santa Barbara County in California and a Santa Barbara in
+    // several other countries' address data. The licence table this list comes
+    // from is CSLB, so California is the only state that can ever be right.
+    if (stateOf(p) && stateOf(p) !== "CA") { droppedOutOfArea++; return false; }
+    if (!allowedCounties.has(county)) { droppedOutOfArea++; return false; }
+    return true;
+  });
+
+  const mapped = places.map((p) => ({
     placeId: p.id,
     businessName: p.displayName ? p.displayName.text : "Unknown",
     address: p.formattedAddress || "",
@@ -79,6 +138,8 @@ export async function searchContractors({ trade, location, apiKey }) {
     hasHours: Boolean(p.regularOpeningHours && p.regularOpeningHours.periods && p.regularOpeningHours.periods.length),
     photoCount: (p.photos || []).length,
   }));
+
+  return { results: mapped, droppedOutOfArea, missingCounty };
 }
 
 // ─── Google Business Profile completeness ─────────────────────────────────
