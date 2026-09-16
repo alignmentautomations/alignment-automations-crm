@@ -14,6 +14,8 @@ export async function onRequestGet({ env }) {
       // tag and cannot see overflow. Keep in sync with buildLeadNote.
       "Has Website", "Has Viewport Tag", "Listing Link 404s", "Bot Challenged", "Agency Detected", "Facebook", "Instagram",
       "Twitter/X", "LinkedIn", "Rating", "Reviews",
+      // Added 2026-09-16 alongside the new prospector signals.
+      "Google Category", "Owner Photos", "Photo Authors", "Newest Review (sampled)", "Reviews Sampled",
       "Address", "Google Maps", "Channel", "Leak Flagged", "Date Sent",
       "Watched", "Replied", "Next Follow-up", "Outreach Stage", "Pushed to Pipeline",
     ];
@@ -30,6 +32,11 @@ export async function onRequestGet({ env }) {
         check.agencyDetected ? "Yes" : "No",
         social.facebook || "", social.instagram || "", social.twitter || "", social.linkedin || "",
         p.rating ?? "", p.review_count ?? "",
+        p.primary_type || "",
+        p.owner_photo_likely ?? 0,
+        (() => { try { return (JSON.parse(p.photo_authors || "[]")).join(" | "); } catch { return ""; } })(),
+        p.newest_review_sampled || "",
+        p.review_sample_size ?? 0,
         p.address, p.google_maps_url,
         p.channel || "", p.leak_flagged || "", p.date_sent || "",
         p.watched ? "Yes" : "No", p.replied ? "Yes" : "No",

@@ -2734,6 +2734,38 @@ function websiteCell(p) {
   );
 }
 
+// Added 2026-09-16. The three signals a full day of by-hand screening died on,
+// surfaced so the next screen is a glance instead of nine browser sessions.
+//
+// ⚠ ownerPhotoLikely is a LEAD, not a verdict — the author-name match is
+// deliberately crude (see summarizePhotos). photo_authors carries the raw names
+// so "0 owner photos" can always be checked by eye against a list of ordinary
+// people's names. Same discipline as the viewport-tag rename.
+function ownerPhotoCell(p) {
+  const n = p.owner_photo_likely ?? 0;
+  const authors = p.photo_authors || [];
+  if (n > 0) return <span title={authors.join(", ")}>{n} owner photo{n === 1 ? "" : "s"}</span>;
+  if (authors.length > 0) {
+    return <span className="no-site" title={"Photo authors: " + authors.join(", ")}>
+      no owner photos ({authors.length} by others)
+    </span>;
+  }
+  return <span className="no-site">no photos at all</span>;
+}
+
+// ⚠ A LOWER BOUND. Places returns at most five reviews and cannot be asked for
+// newest-first, so the real newest can only be more recent than this.
+function reviewAgeCell(p) {
+  const d = p.newest_review_sampled;
+  if (!d) return <span className="no-site">no review dates</span>;
+  const years = (Date.now() - new Date(d + "T00:00:00Z").getTime()) / (365.25 * 24 * 3600 * 1000);
+  const label = years >= 1 ? `${years.toFixed(1)}y ago` : `${Math.max(1, Math.round(years * 12))}mo ago`;
+  const sampled = p.review_sample_size ?? 0;
+  const total = p.review_count ?? 0;
+  const partial = sampled > 0 && total > sampled ? ` (newest of ${sampled} of ${total} sampled)` : "";
+  return <span className={years >= 3 ? "no-site" : undefined} title={d + partial}>{label}</span>;
+}
+
 const GBP_STATUS_COLOR = { "Complete": "#10b981", "Incomplete": "#f59e0b", "Unclaimed / bare": "#ef4444" };
 
 function gbpCell(p) {
@@ -2839,17 +2871,20 @@ function ProspectRow({ p, expanded, onToggle, onUpdate, onDelete, onPush }) {
         <td>{expanded ? "▾" : "▸"}</td>
         <td><span className="score-badge" style={{ background: tierColor(p.tier) }}>{p.score}</span></td>
         <td>{p.business_name}</td>
-        <td>{p.trade}</td>
+        {/* Google's own category, not our search term. "Suppliers" here would
+            have killed Negranti on sight instead of after a browser session. */}
+        <td>{p.primary_type || p.trade}</td>
         <td>{websiteCell(p)}</td>
+        <td>{ownerPhotoCell(p)}</td>
+        <td>{reviewAgeCell(p)}</td>
         <td>{gbpCell(p)}</td>
         <td>{licenseCell(p)}</td>
         <td>{p.phone}{p.phone && p.email && <br />}{p.email}</td>
-        <td>{socialCell(p)}</td>
         <td>{p.outreach_stage}</td>
       </tr>
       {expanded && (
         <tr className="detail-row">
-          <td colSpan={10}>
+          <td colSpan={11}>
             <div className="detail-grid">
               <div className="detail-block">
                 <h4>Signals (auto)</h4>
@@ -2858,6 +2893,18 @@ function ProspectRow({ p, expanded, onToggle, onUpdate, onDelete, onPush }) {
                     <li key={key} className={auto[key] ? "on" : ""}>{auto[key] ? "✓" : "—"} {label}</li>
                   ))}
                 </ul>
+              </div>
+              <div className="detail-block">
+                <h4>Photos &amp; social</h4>
+                {/* Photo authorship in full. "0 owner photos" is only
+                    trustworthy next to the list of who DID take them. */}
+                <div style={{ fontSize: 12, marginBottom: 6 }}>{ownerPhotoCell(p)}</div>
+                {(p.photo_authors || []).length > 0 && (
+                  <div style={{ fontSize: 11, color: "#64748b", marginBottom: 6 }}>
+                    by: {(p.photo_authors || []).join(", ")}
+                  </div>
+                )}
+                <div>{socialCell(p)}</div>
               </div>
               <div className="detail-block">
                 <h4>Signals (your call)</h4>
@@ -3239,7 +3286,7 @@ function ProspectingView({ onToast, onPushed }) {
 
         <div className="prospecting-table-wrap">
           <table>
-            <thead><tr><th></th><th>Score</th><th>Business</th><th>Trade</th><th>Website</th><th>GBP</th><th>Licence</th><th>Contact</th><th>Social</th><th>Stage</th></tr></thead>
+            <thead><tr><th></th><th>Score</th><th>Business</th><th>Type</th><th>Website</th><th>Own photos</th><th>Newest rev</th><th>GBP</th><th>Licence</th><th>Contact</th><th>Stage</th></tr></thead>
             <tbody>
               {loading ? (
                 <tr><td colSpan={9}><div className="loading">Loading…</div></td></tr>

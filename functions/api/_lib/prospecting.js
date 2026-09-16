@@ -22,6 +22,18 @@ const FIELD_MASK = [
   "places.types",
   "places.regularOpeningHours",
   "places.photos",
+  // Added 2026-09-16, after a screening day in which EVERY candidate died on
+  // something none of the stored fields could see. All three are on the same
+  // Text Search call, so they add no extra request and no extra quota.
+  //
+  //   primaryTypeDisplayName - Google's own one-line category. `types` leads
+  //     with "general_contractor" for a business whose primaryTypeDisplayName
+  //     is "Suppliers" (verified on Negranti Construction), so the array is
+  //     actively misleading and this field is the honest one.
+  //   reviews - carries publishTime. Nothing stored knew how OLD the reviews
+  //     were, so a 5.0 from 2016 and a 5.0 from last month were identical.
+  "places.primaryTypeDisplayName",
+  "places.reviews",
 ].join(",");
 
 // The business only prospects in the US. Google's Text Search neither
@@ -135,11 +147,87 @@ export async function searchContractors({ trade, location, apiKey, allowedCounti
     businessStatus: p.businessStatus || "",
     googleMapsUrl: p.googleMapsUri || "",
     types: p.types || [],
+    primaryType: p.primaryTypeDisplayName ? p.primaryTypeDisplayName.text : "",
     hasHours: Boolean(p.regularOpeningHours && p.regularOpeningHours.periods && p.regularOpeningHours.periods.length),
     photoCount: (p.photos || []).length,
+    ...summarizePhotos(p.photos, p.displayName ? p.displayName.text : ""),
+    ...summarizeReviews(p.reviews),
   }));
 
   return { results: mapped, droppedOutOfArea, missingCounty };
+}
+
+// ─── Photo provenance ─────────────────────────────────────────────────────
+//
+// ⚠⚠ WHY THIS EXISTS: `photoCount` counts EVERY photo on a listing, Street
+// View and customer uploads included. On 2026-09-16, nine businesses were
+// verified BY HAND to have zero photographs of their own, and the stored
+// gbp_status called them "Complete", "Incomplete" and "Unclaimed / bare" —
+// Negranti Construction scored **"Complete" with no owner photos at all**.
+// The field was blind to the single thing that disqualified all nine.
+//
+// ⭐ OWNER PHOTOS ARE THE CHEAPEST AND MOST DECISIVE DISQUALIFIER IN THE MODEL.
+// Every page built so far is carried by the client's own photographs, and the
+// one build made without any (Paul Cuce #29) was the hardest in the set. This
+// is knowable before a minute is spent on Step 0.
+//
+// The discriminator is `authorAttributions[0].displayName`: an owner upload is
+// attributed to the BUSINESS, a customer upload to a person. Verified against
+// three known cases — iwerks (2 of 5 by the business), Nagy (10 of 10 by
+// individuals), Negranti (3 of 3 by individuals).
+//
+// ⚠ THE MATCH IS DELIBERATELY CRUDE AND IS LABELLED A LEAD, NOT A VERDICT.
+// The business's Google account name is not always its listing name: iwerks
+// lists as "iwerks construction and carpentry" and its photos are attributed
+// to "iwerks construction and professional han…". An exact match would miss
+// it. But the vault's banked rule after three bad matchers is STOP WRITING
+// FUZZY NAME MATCHERS, so this compares only the FIRST TWO normalized tokens
+// and nothing cleverer — and `photoAuthors` carries the raw names alongside so
+// the answer is always checkable by eye. Same discipline as the mobileFriendly
+// rename: report what was seen, never a conclusion the data cannot support.
+function nameTokens(s) {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+}
+
+export function summarizePhotos(photos, businessName) {
+  const list = photos || [];
+  const want = nameTokens(businessName).slice(0, 2);
+  const authors = [];
+  let ownerLikely = 0;
+
+  for (const ph of list) {
+    const a = (ph.authorAttributions || [])[0] || {};
+    const name = a.displayName || "";
+    if (name && !authors.includes(name)) authors.push(name);
+    const got = nameTokens(name).slice(0, 2);
+    if (want.length && got.length >= want.length && want.every((t, i) => got[i] === t)) ownerLikely++;
+  }
+  return {
+    photoAuthors: authors,
+    ownerPhotoLikely: ownerLikely,   // a LEAD. Confirm on the listing's "By owner" tab.
+  };
+}
+
+// ─── Review recency ───────────────────────────────────────────────────────
+//
+// ⚠ THE REVIEWS ARRAY IS A SAMPLE, NOT THE FULL SET. Places returns at most
+// five, chosen by its own relevance ordering, and there is no way to ask for
+// newest-first. So `newestReview` is a LOWER BOUND: the real newest review can
+// be more recent than this and never older. Named accordingly, and
+// `reviewSampleSize` is stored beside it so the gap from `reviewCount` is
+// visible rather than implied.
+//
+// Worth it anyway: on iwerks the five returned were all January 2023, within
+// five days of each other, which turned "the reviews feel stale" into a dated
+// fact and matched a by-hand read of all eight.
+export function summarizeReviews(reviews) {
+  const list = reviews || [];
+  let newest = null;
+  for (const r of list) {
+    const t = (r.publishTime || "").slice(0, 10);
+    if (t && (!newest || t > newest)) newest = t;
+  }
+  return { newestReviewSampled: newest, reviewSampleSize: list.length };
 }
 
 // ─── Google Business Profile completeness ─────────────────────────────────
@@ -148,6 +236,19 @@ export async function searchContractors({ trade, location, apiKey, allowedCounti
 // claimed and filled out, or left bare. Hours and photos are the two fields
 // an owner has to actively add; their absence together is the strongest
 // public proxy we have for "unclaimed or ignored."
+// ⚠⚠ READ THIS BEFORE TRUSTING THE RESULT. `photoCount` is EVERY photo on the
+// listing, including Street View and customer uploads, so "Complete" here means
+// "has hours and has some photos" — it does NOT mean the owner has ever posted
+// anything. Negranti Construction scored "Complete" on 2026-09-16 with zero
+// photographs of its own. For the question that actually decides a build, use
+// `ownerPhotoLikely` / `photoAuthors` from summarizePhotos, not this.
+//
+// ⚠ It also cannot see whether a listing is CLAIMED. Google does not expose
+// that in the Places API at all, so "Unclaimed / bare" is an inference from two
+// empty fields and nothing more. R J Potter Construction is genuinely unclaimed
+// and scored "Incomplete", understating a real hook. Claimed status stays a
+// by-hand check on the listing ("Claim this business" appears only when it is
+// unclaimed).
 export function deriveGbpStatus({ hasHours, photoCount }) {
   const hasPhotos = (photoCount || 0) > 0;
   if (hasHours && hasPhotos) return "Complete";

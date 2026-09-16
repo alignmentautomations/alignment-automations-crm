@@ -171,6 +171,15 @@ export async function onRequestPost({ request, env }) {
         businessStatus: result.businessStatus,
         googleMapsUrl: result.googleMapsUrl,
         gbpStatus,
+        // Added 2026-09-16. These come off the same Places call and are the
+        // three signals that a whole day of by-hand screening died on:
+        // what Google actually calls the business, whether the OWNER has ever
+        // posted a photo, and how old the reviews are.
+        primaryType: result.primaryType,
+        ownerPhotoLikely: result.ownerPhotoLikely,
+        photoAuthors: result.photoAuthors,
+        newestReviewSampled: result.newestReviewSampled,
+        reviewSampleSize: result.reviewSampleSize,
         websiteCheck,
         score,
         tier,
@@ -190,8 +199,10 @@ export async function onRequestPost({ request, env }) {
           website, rating, review_count, business_status, google_maps_url, gbp_status,
           website_check, manual_signals, score, tier, outreach_stage,
           license_no, license_status, license_secondary, license_classes,
-          license_expiration, license_bond_cancel, license_name, license_candidates
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          license_expiration, license_bond_cancel, license_name, license_candidates,
+          primary_type, owner_photo_likely, photo_authors,
+          newest_review_sampled, review_sample_size
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       `);
       const batch = prospects.map((p) => {
         const lic = licenses.get(p.placeId) || {};
@@ -203,7 +214,12 @@ export async function onRequestPost({ request, env }) {
           p.score, p.tier, "New",
           lic.licenseNo ?? null, lic.status ?? "UNMATCHED", lic.secondary ?? null,
           lic.classes ?? null, lic.expiration ?? null, lic.bondCancel ?? null,
-          lic.licenseName ?? null, JSON.stringify(lic.candidates || [])
+          lic.licenseName ?? null, JSON.stringify(lic.candidates || []),
+          p.primaryType || null,
+          p.ownerPhotoLikely ?? 0,
+          JSON.stringify(p.photoAuthors || []),
+          p.newestReviewSampled || null,
+          p.reviewSampleSize ?? 0
         );
       });
       await env.DB.batch(batch);
