@@ -10,7 +10,9 @@ export async function onRequestGet({ env }) {
 
     const headers = [
       "Business", "Trade", "Score", "Tier", "Phone", "Email", "Website",
-      "Has Website", "Mobile Friendly", "Agency Detected", "Facebook", "Instagram",
+      // "Has Viewport Tag", not "Mobile Friendly" — the check reads one meta
+      // tag and cannot see overflow. Keep in sync with buildLeadNote.
+      "Has Website", "Has Viewport Tag", "Listing Link 404s", "Bot Challenged", "Agency Detected", "Facebook", "Instagram",
       "Twitter/X", "LinkedIn", "Rating", "Reviews",
       "Address", "Google Maps", "Channel", "Leak Flagged", "Date Sent",
       "Watched", "Replied", "Next Follow-up", "Outreach Stage", "Pushed to Pipeline",
@@ -23,6 +25,8 @@ export async function onRequestGet({ env }) {
         p.business_name, p.trade, p.score, p.tier, p.phone, p.email, p.website,
         p.website ? "Yes" : "No",
         check.mobileFriendly === true ? "Yes" : check.mobileFriendly === false ? "No" : "",
+        check.listingLinkBroken ? "Yes" : "",
+        check.challenged ? "Yes" : "",
         check.agencyDetected ? "Yes" : "No",
         social.facebook || "", social.instagram || "", social.twitter || "", social.linkedin || "",
         p.rating ?? "", p.review_count ?? "",

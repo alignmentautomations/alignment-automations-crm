@@ -175,6 +175,11 @@ const BROWSER_UA =
 // non-standard block code.
 const REFUSED_STATUSES = new Set([401, 403, 429, 451, 999]);
 
+// "This exact URL is not here" — worth retrying the origin before condemning
+// the whole domain. Distinct from REFUSED_STATUSES, which mean "we were not
+// allowed to look", and from 5xx, which means the server itself is unwell.
+const NOT_FOUND_STATUSES = new Set([404, 410]);
+
 // Phrases that *can* precede an agency credit — but the phrase alone isn't
 // enough evidence (see detectAgency below). Deliberately excludes "powered
 // by": that phrase is almost always a CMS/plugin credit ("Powered by
@@ -321,9 +326,55 @@ async function fetchHtml(url, signal) {
 
 const EMPTY_SOCIAL = { facebook: null, instagram: null, twitter: null, linkedin: null };
 
+// The viewport tag, matched the way HTML actually gets written.
+//
+// The previous pattern was /<meta[^>]+name=["']viewport["']/i, which REQUIRES a
+// quote straight after `name=`. Unquoted attribute values are perfectly legal
+// HTML5, and two competent responsive sites in the 2026-09-15 General Building
+// batch serve exactly that:
+//
+//   <meta name=viewport content="width=device-width, initial-scale=1.0, ...">
+//
+// Both scored "not mobile-friendly" with the tag sitting right there in their
+// markup. `\b` after the word is what keeps `name=viewportx` and
+// `name="viewporter"` from matching once the quotes are optional.
+const VIEWPORT_META_RE = /<meta[^>]+name\s*=\s*["']?viewport\b/i;
+
+// A bot challenge is not a broken site, even when it answers 2xx.
+//
+// REFUSED_STATUSES catches the challenges that come back 401/403/429 —
+// Cloudflare's, mainly. SiteGround's SGCaptcha does not: it returns **HTTP 202
+// with a 166-byte body** whose only content is a meta-refresh to
+// /.well-known/sgcaptcha/. `res.ok` is true for 202, so that stub sailed
+// through as the real page, had no viewport tag, and manufactured a defect on
+// two working sites in the 2026-09-15 batch.
+//
+// A real browser follows the refresh, clears the challenge and lands on the
+// site. We cannot, so the honest answer for anything read off this stub is
+// `null` — "could not determine" — never `false`.
+const CHALLENGE_MARKERS = [
+  /\/\.well-known\/sgcaptcha/i,   // SiteGround
+  /cf-browser-verification/i,     // Cloudflare (legacy interstitial)
+  /__cf_chl|challenge-platform/i, // Cloudflare (turnstile / managed challenge)
+  /_Incapsula_Resource/i,         // Imperva
+  /distil_r_captcha|px-captcha/i, // Distil / PerimeterX
+];
+
+// Body small enough that there is no real page in it. A genuine homepage,
+// however sparse, is far bigger than this; the observed stub was 166 bytes.
+const CHALLENGE_MAX_BYTES = 1024;
+
+export function isChallengePage(html) {
+  if (!html) return false;
+  if (CHALLENGE_MARKERS.some((re) => re.test(html))) return true;
+  // A tiny document whose only instruction is "go somewhere else immediately"
+  // is an interstitial by construction, whoever served it.
+  return html.length <= CHALLENGE_MAX_BYTES && /<meta[^>]+http-equiv\s*=\s*["']?refresh\b/i.test(html);
+}
+
 export async function checkWebsite(rawUrl) {
   if (!rawUrl) {
-    return { attempted: false, reachable: null, mobileFriendly: null, loadTimeMs: null, agencyDetected: false, builderPlatform: null, email: null, social: EMPTY_SOCIAL };
+    return { attempted: false, reachable: null, challenged: false, listingLinkBroken: false, mobileFriendly: null, loadTimeMs: null, agencyDetected: false, builderPlatform: null, email: null, social: EMPTY_SOCIAL };
   }
 
   const url = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
@@ -332,7 +383,41 @@ export async function checkWebsite(rawUrl) {
   const started = Date.now();
 
   try {
-    const { res, html } = await fetchHtml(url, controller.signal);
+    let { res, html } = await fetchHtml(url, controller.signal);
+
+    // A 404 on a PATH says nothing about the domain. Google Places hands back
+    // whatever the listing owner typed, and one 2026-09-15 row carried
+    // `pasoroblespools.com/gradyspools.com` — a domain pasted on as a path.
+    // That 404'd, scored "site unreachable", and the business was one step from
+    // a spec build pitched on a dead website that is in fact live and fine.
+    //
+    // So when a non-root URL 404s, ask the origin. If the origin answers, the
+    // site works and the real finding is a different one: their own listing
+    // publishes a dead link. That is worth recording, and it is worth handing
+    // them for free — but it is NOT a broken website.
+    let listingLinkBroken = false;
+    if (NOT_FOUND_STATUSES.has(res.status)) {
+      let origin = null;
+      try {
+        const parsed = new URL(url);
+        if (parsed.pathname && parsed.pathname !== "/") origin = parsed.origin;
+      } catch {
+        // unparseable; nothing to retry
+      }
+      if (origin) {
+        try {
+          const retry = await fetchHtml(origin, controller.signal);
+          if (retry.res.ok) {
+            listingLinkBroken = true;
+            res = retry.res;
+            html = retry.html;
+          }
+        } catch {
+          // Retry failed; keep the original 404 result and say nothing more.
+        }
+      }
+    }
+
     const loadTimeMs = Date.now() - started;
 
     let siteHostname = null;
@@ -342,26 +427,40 @@ export async function checkWebsite(rawUrl) {
       // leave null
     }
 
-    // Three states, not two. `false` has to mean "we looked and the tag is
-    // absent"; with no HTML to look at the honest answer is `null`. Reporting
-    // `false` off an empty body let one refused fetch manufacture a second
-    // defect on top of the reachability one.
-    const mobileFriendly = html ? /<meta[^>]+name=["']viewport["']/i.test(html) : null;
-    const agencyDetected = detectAgency(html, siteHostname);
-    const builder = BUILDER_PATTERNS.find((b) => b.re.test(html));
-    const social = extractSocialLinks(html);
-    let email = extractEmail(html);
+    // Anything parsed out of a challenge stub is an artifact of the challenge,
+    // not a fact about the site — so the whole read is inconclusive, not just
+    // the viewport tag.
+    const challenged = isChallengePage(html);
 
-    if (!email && res.ok) {
+    // Three states, not two. `false` has to mean "we looked and the tag is
+    // absent"; with no HTML to look at — or only a challenge stub — the honest
+    // answer is `null`. Reporting `false` off an empty body let one refused
+    // fetch manufacture a second defect on top of the reachability one.
+    //
+    // NOTE ON WHAT THIS ACTUALLY MEASURES: the presence of a viewport tag, and
+    // nothing more. A site can carry the tag and still overflow horizontally.
+    // Treat `false` as "worth checking", not as a verdict — confirm with
+    // tools/probe-mobile.py before any of it reaches a prospect.
+    const mobileFriendly = (html && !challenged) ? VIEWPORT_META_RE.test(html) : null;
+    const agencyDetected = challenged ? false : detectAgency(html, siteHostname);
+    const builder = challenged ? null : BUILDER_PATTERNS.find((b) => b.re.test(html));
+    const social = challenged ? EMPTY_SOCIAL : extractSocialLinks(html);
+    let email = challenged ? null : extractEmail(html);
+
+    if (!email && res.ok && !challenged) {
       email = await findEmailOnContactPages(url);
     }
 
     return {
       attempted: true,
       // null means "could not determine", never "broken". A refusal proves
-      // nothing about whether the site works for a real visitor.
-      reachable: res.ok ? true : (REFUSED_STATUSES.has(res.status) ? null : false),
+      // nothing about whether the site works for a real visitor, and neither
+      // does a bot challenge we were never going to clear.
+      reachable: challenged ? null : (res.ok ? true : (REFUSED_STATUSES.has(res.status) ? null : false)),
       refused: REFUSED_STATUSES.has(res.status),
+      challenged,
+      // The site is fine; the URL their own listing publishes is not.
+      listingLinkBroken,
       statusCode: res.status,
       loadTimeMs,
       mobileFriendly,
@@ -380,6 +479,8 @@ export async function checkWebsite(rawUrl) {
       attempted: true,
       reachable: timedOut ? null : false,
       refused: false,
+      challenged: false,
+      listingLinkBroken: false,
       statusCode: null,
       loadTimeMs: Date.now() - started,
       mobileFriendly: null,
@@ -457,9 +558,14 @@ export function deriveAutoSignals({ website, websiteCheck, phone, email }) {
   // bot-blocked site as broken, which is the bug that had well-established
   // businesses coming back "Warm".
   const siteBroken = hasWebsite && websiteCheck && websiteCheck.reachable === false;
-  const notMobileFriendly = hasWebsite && websiteCheck && websiteCheck.mobileFriendly === false;
+  // A missing viewport tag stays a scoring signal — all three true positives in
+  // the 2026-09-15 batch had no tag AND real horizontal overflow, so it earns
+  // its place. What changed is the CLAIM made about it downstream: see
+  // buildLeadNote. The signal is a lead, the verdict comes from probe-mobile.py.
+  const noViewportTag = hasWebsite && websiteCheck && websiteCheck.mobileFriendly === false;
+  const listingLinkBroken = hasWebsite && websiteCheck && websiteCheck.listingLinkBroken === true;
 
-  const visibleProblem = !hasWebsite || siteBroken || notMobileFriendly;
+  const visibleProblem = !hasWebsite || siteBroken || noViewportTag || listingLinkBroken;
   const hasAgency = Boolean(websiteCheck && websiteCheck.agencyDetected);
   const reachable = Boolean(phone || email || hasWebsite);
   const noWayToReach = !phone && !email && !hasWebsite;
@@ -511,7 +617,14 @@ export function buildLeadNote(prospectRow) {
   if (!prospectRow.website) bits.push("No website");
   else {
     if (check.reachable === false) bits.push("site unreachable");
-    if (check.mobileFriendly === false) bits.push("not mobile-friendly");
+    // Say what was measured, not what it implies. This flag is the presence of
+    // a viewport meta tag and nothing else; a site can carry one and still
+    // overflow. It used to read "not mobile-friendly", which is a verdict the
+    // check cannot support — and that wording was one copy-paste away from a
+    // letter telling a prospect their working site is broken on phones.
+    // Confirm with tools/probe-mobile.py before it goes anywhere near outreach.
+    if (check.mobileFriendly === false) bits.push("no mobile viewport tag (verify before pitching)");
+    if (check.listingLinkBroken) bits.push("Google listing link 404s (site itself is fine)");
     if (check.agencyDetected) bits.push("already has an agency");
   }
   if (prospectRow.gbp_status === "Unclaimed / bare") bits.push("Google Business Profile unclaimed/bare");

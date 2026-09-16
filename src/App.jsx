@@ -2716,7 +2716,15 @@ function websiteCell(p) {
   if (!p.website) return <span className="no-site">No website</span>;
   const bits = [];
   if (check.reachable === false) bits.push("unreachable");
-  if (check.mobileFriendly === false) bits.push("not mobile-friendly");
+  // "no viewport tag", not "not mobile-friendly". The check tests for the
+  // presence of one meta tag; it cannot see horizontal overflow, so the old
+  // label claimed more than the evidence supports. Four properly responsive
+  // sites carried it on 2026-09-15. Verify with tools/probe-mobile.py before
+  // this reaches a prospect. Keep in sync with buildLeadNote in
+  // functions/api/_lib/prospecting.js.
+  if (check.mobileFriendly === false) bits.push("no viewport tag — verify");
+  if (check.listingLinkBroken) bits.push("listing link 404s, site OK");
+  if (check.challenged) bits.push("bot-challenged, could not read");
   if (check.builderPlatform) bits.push(check.builderPlatform);
   return (
     <span className="has-site">
@@ -2813,7 +2821,7 @@ const OUTREACH_STAGES = ["New", "Sent", "Watched", "Replied", "Call booked", "Pr
 function autoSignalsFor(p) {
   const check = p.website_check || {};
   return {
-    visibleProblem: !p.website || check.reachable === false || check.mobileFriendly === false,
+    visibleProblem: !p.website || check.reachable === false || check.mobileFriendly === false || check.listingLinkBroken === true,
     hasAgency: Boolean(check.agencyDetected),
     reachable: Boolean(p.phone || p.email || p.website),
     noWayToReach: !p.phone && !p.email && !p.website,
