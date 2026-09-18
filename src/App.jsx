@@ -2741,9 +2741,28 @@ function websiteCell(p) {
 // deliberately crude (see summarizePhotos). photo_authors carries the raw names
 // so "0 owner photos" can always be checked by eye against a list of ordinary
 // people's names. Same discipline as the viewport-tag rename.
+// ⚠⚠ photoAuthorsOf EXISTS BECAUSE THIS CELL TOOK THE WHOLE PROSPECTOR PAGE
+// WHITE ON 2026-09-18. photo_authors is a JSON STRING in D1 and the API
+// serializer was not parsing it, so `p.photo_authors || []` handed back the
+// string '[]' — truthy, length 2 — which fell into the branch below and called
+// .join() on a string. Every row threw, so the page rendered nothing at all.
+// The serializer is fixed; this stays so a shape change can never blank the
+// page again. A cell should degrade, not crash.
+function photoAuthorsOf(p) {
+  const raw = p.photo_authors;
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw !== "string" || !raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
 function ownerPhotoCell(p) {
   const n = p.owner_photo_likely ?? 0;
-  const authors = p.photo_authors || [];
+  const authors = photoAuthorsOf(p);
   if (n > 0) return <span title={authors.join(", ")}>{n} owner photo{n === 1 ? "" : "s"}</span>;
   if (authors.length > 0) {
     return <span className="no-site" title={"Photo authors: " + authors.join(", ")}>
@@ -2899,9 +2918,12 @@ function ProspectRow({ p, expanded, onToggle, onUpdate, onDelete, onPush }) {
                 {/* Photo authorship in full. "0 owner photos" is only
                     trustworthy next to the list of who DID take them. */}
                 <div style={{ fontSize: 12, marginBottom: 6 }}>{ownerPhotoCell(p)}</div>
-                {(p.photo_authors || []).length > 0 && (
+                {/* ⚠ photoAuthorsOf, not p.photo_authors — the raw column is a
+                    JSON string. This was the second crash site of the same bug
+                    on 2026-09-18; the first was in ownerPhotoCell above. */}
+                {photoAuthorsOf(p).length > 0 && (
                   <div style={{ fontSize: 11, color: "#64748b", marginBottom: 6 }}>
-                    by: {(p.photo_authors || []).join(", ")}
+                    by: {photoAuthorsOf(p).join(", ")}
                   </div>
                 )}
                 <div>{socialCell(p)}</div>

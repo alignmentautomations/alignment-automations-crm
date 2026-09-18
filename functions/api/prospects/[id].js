@@ -7,7 +7,22 @@ function parseProspect(p) {
     ...p,
     website_check: p.website_check ? JSON.parse(p.website_check) : {},
     manual_signals: p.manual_signals ? JSON.parse(p.manual_signals) : { runsAds: false, growthIntent: false, ownerOperated: false },
+    // ⚠ Must match the serializer in ../prospects.js. photo_authors is a JSON
+    // STRING in the column; handing the raw text to the UI crashed the page.
+    // See the note there. Added 2026-09-18.
+    photo_authors: parseJsonArray(p.photo_authors),
   };
+}
+
+function parseJsonArray(s) {
+  if (Array.isArray(s)) return s;
+  if (!s) return [];
+  try {
+    const v = JSON.parse(s);
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function onRequestPatch({ params, request, env }) {
