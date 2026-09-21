@@ -3077,7 +3077,7 @@ function ProspectingView({ onToast, onPushed }) {
         setSearchStatus(`No towns on file for ${county}.`);
         return;
       }
-      let added = 0, dupes = 0, contacted = 0, done = 0, outOfArea = 0;
+      let added = 0, dupes = 0, contacted = 0, done = 0, outOfArea = 0, offScope = 0;
       for (const t of towns) {
         if (stopRef.current) break;
         const location = `${t.city}, CA`;
@@ -3092,6 +3092,7 @@ function ProspectingView({ onToast, onPushed }) {
           dupes += data.alreadyListed || 0;
           contacted += data.alreadyContacted || 0;
           outOfArea += data.droppedOutOfArea || 0;
+          offScope += data.droppedOffScope || 0;
         } catch (err) {
           // One bad town must not end the sweep -- a Places hiccup on Cayucos
           // should not cost the other seventeen.
@@ -3110,9 +3111,12 @@ function ProspectingView({ onToast, onPushed }) {
       // the small towns, which are exactly the ones Places pads out with
       // statewide results. Reporting the total makes that visible.
       const areaNote = outOfArea > 0 ? ` Dropped ${outOfArea} outside the service area.` : "";
+      // Same reasoning for off-scope: the sweep's small towns are where Places
+      // pads the page out with art galleries, restaurants and hardware stores.
+      const scopeNote = offScope > 0 ? ` Dropped ${offScope} off-scope.` : "";
       setSearchStatus(
         `${county}: ${added} prospect(s) from ${done} town(s)${stopped}.` +
-        (skipNote ? ` Skipped ${skipNote}.` : "") + areaNote
+        (skipNote ? ` Skipped ${skipNote}.` : "") + areaNote + scopeNote
       );
       setExpandedId(null);
     } catch (err) {
@@ -3138,10 +3142,14 @@ function ProspectingView({ onToast, onPushed }) {
       // removed, and "No results" with no explanation looks like a broken
       // search rather than a working filter.
       const areaNote = data.droppedOutOfArea > 0 ? ` Dropped ${data.droppedOutOfArea} outside the service area.` : "";
+      // Off-scope means a category a contractor cannot be - an art gallery,
+      // a restaurant, a hardware store. Reported rather than hidden, so
+      // over-filtering would be visible instead of silent.
+      const scopeNote = data.droppedOffScope > 0 ? ` Dropped ${data.droppedOffScope} off-scope.` : "";
       if (data.added === 0) {
-        setSearchStatus(`No results for "${trade} in ${location}"${thinNote}.${areaNote} Double-check the city spelling and try again.`);
+        setSearchStatus(`No results for "${trade} in ${location}"${thinNote}.${areaNote}${scopeNote} Double-check the city spelling and try again.`);
       } else if (data.skipped > 0) {
-        setSearchStatus(`Found ${data.added} prospect(s) — top ${data.added} of ${data.added + data.skipped} matches${thinNote}.${areaNote}`);
+        setSearchStatus(`Found ${data.added} prospect(s) — top ${data.added} of ${data.added + data.skipped} matches${thinNote}.${areaNote}${scopeNote}`);
       } else {
         const skipNote = [
           data.alreadyListed > 0 ? `${data.alreadyListed} already on the list` : "",

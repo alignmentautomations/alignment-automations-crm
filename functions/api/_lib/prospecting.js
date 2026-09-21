@@ -33,6 +33,11 @@ const FIELD_MASK = [
   //   reviews - carries publishTime. Nothing stored knew how OLD the reviews
   //     were, so a 5.0 from 2016 and a 5.0 from last month were identical.
   "places.primaryTypeDisplayName",
+  // The RAW machine type behind primaryTypeDisplayName ("art_gallery",
+  // "restaurant"). Added 2026-09-21 for the off-scope filter below: the
+  // display name is free text and localized, the raw type is a stable
+  // enum, so the denylist matches on this.
+  "places.primaryType",
   "places.reviews",
 ].join(",");
 
@@ -42,6 +47,80 @@ const FIELD_MASK = [
 // we bias with regionCode AND hard-filter results by the country address
 // component, which reliably carries a 2-letter code ("US", "GB", ...).
 const SEARCH_COUNTRY = "US";
+
+// ─── Keeping the results on-trade ─────────────────────────────────────────
+//
+// ⚠⚠ THE SEARCH HAD NO TYPE CONSTRAINT AT ALL until 2026-09-21. It sent
+// `"<trade> in <location>"` as plain text and took whatever came back, and
+// `INDUSTRY_MAP` below only labels the industry in the CRM — it never
+// constrained anything.
+//
+// That is survivable in a city and bad in a county sweep, because the sweep
+// runs ONE SEARCH PER TOWN and a small town has no 20 painters to return, so
+// Google pads the page with whatever is semantically near the words.
+// Surveying 521 results across 6 trades x 8 Santa Barbara County towns,
+// 7.5% were junk: a restaurant (Cuyama Buckhorn), a vacation rental, Gallery
+// Los Olivos, an art studio, paint SHOPS and hardware stores. "Painter" is the
+// worst offender because it also means ARTIST.
+//
+// Two fixes, because one is not available for most trades.
+
+// (a) Google's own type filter, where the trade HAS a searchable type.
+//     ⚠ Only these four of the sixteen trades do. `general_contractor`,
+//     `landscaper`, `concrete_contractor` and the rest are types Google
+//     RETURNS but will not SEARCH on, and passing one is a 400. Verified by
+//     probing every trade in INDUSTRY_MAP on 2026-09-21.
+//     Measured on "painter in Los Olivos": 8 results with one art gallery
+//     became 12 results with none — it removes junk AND finds more real
+//     businesses, because the constraint surfaces companies whose NAME did not
+//     match the query text strongly.
+const TRADE_PLACE_TYPE = {
+  painter: "painter",
+  roofer: "roofing_contractor",
+  plumber: "plumber",
+  electrician: "electrician",
+};
+
+// (b) A denylist for every trade, matched on the RAW primaryType.
+//
+//     ⚠ It matches on Google's type, NEVER on the business name — the locked
+//     rule after three separate fuzzy-name-matcher failures.
+//
+//     ⚠ DELIBERATELY NOT LISTED, and this is the careful part: `manufacturer`,
+//     `building_materials_store`, `supplier`, `store` and `point_of_interest`.
+//     Those catch real trade businesses — a cabinet maker or countertop
+//     fabricator is typed `manufacturer`, and Negranti Construction, a genuine
+//     construction company, carries primaryTypeDisplayName "Suppliers" (see
+//     the note on FIELD_MASK). Denying them would hide real prospects to
+//     remove a little noise, which is the wrong trade. The type is shown in
+//     the prospect row, so that noise is visible rather than silent.
+//
+//     Everything here is a category a building-trade contractor CANNOT be.
+const OFF_SCOPE_TYPES = new Set([
+  // arts and attractions — the "painter means artist" problem
+  "art_gallery", "art_studio", "museum", "performing_arts_theater",
+  "tourist_attraction", "cultural_landmark", "historical_place",
+  // food and hospitality
+  "restaurant", "cafe", "coffee_shop", "bar", "bakery", "meal_takeaway",
+  "meal_delivery", "fast_food_restaurant", "grocery_store", "supermarket",
+  "convenience_store", "liquor_store", "food_store",
+  "lodging", "hotel", "motel", "resort_hotel", "bed_and_breakfast",
+  "campground", "rv_park", "guest_house", "cottage",
+  // retail that is plainly not a contractor
+  "home_goods_store", "hardware_store", "furniture_store", "clothing_store",
+  "book_store", "shoe_store", "jewelry_store", "department_store",
+  "shopping_mall", "electronics_store", "pet_store", "florist", "gift_shop",
+  "sporting_goods_store", "discount_store",
+  // agriculture and drink tourism
+  "farm", "ranch", "farmstay", "winery", "vineyard",
+  // vehicles
+  "car_repair", "car_dealer", "car_wash", "gas_station", "auto_parts_store",
+  "car_rental",
+]);
+
+export function offScopeType(rawPrimaryType) {
+  return OFF_SCOPE_TYPES.has((rawPrimaryType || "").toLowerCase());
+}
 
 function componentOf(place, type, field) {
   const c = (place.addressComponents || []).find((a) => (a.types || []).includes(type));
@@ -94,6 +173,7 @@ export async function searchContractors({ trade, location, apiKey, allowedCounti
   }
 
   const textQuery = `${trade} in ${location}`;
+  const placeType = TRADE_PLACE_TYPE[(trade || "").toLowerCase()] || null;
   const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
     method: "POST",
     headers: {
@@ -101,7 +181,13 @@ export async function searchContractors({ trade, location, apiKey, allowedCounti
       "X-Goog-Api-Key": apiKey,
       "X-Goog-FieldMask": FIELD_MASK,
     },
-    body: JSON.stringify({ textQuery, pageSize: 20, regionCode: SEARCH_COUNTRY }),
+    body: JSON.stringify({
+      textQuery, pageSize: 20, regionCode: SEARCH_COUNTRY,
+      // Only the four trades in TRADE_PLACE_TYPE have a searchable type;
+      // passing an unsearchable one is a 400, so the rest fall through to
+      // the plain text search and rely on the denylist below.
+      ...(placeType ? { includedType: placeType, strictTypeFiltering: true } : {}),
+    }),
   });
 
   if (!res.ok) {
@@ -123,7 +209,15 @@ export async function searchContractors({ trade, location, apiKey, allowedCounti
   let missingCounty = 0;
   const useFilter = allowedCounties && allowedCounties.size > 0;
 
-  const places = inCountry.filter((p) => {
+  // Drop the categories a building-trade contractor cannot be. Counted and
+  // returned, never silently discarded — the same treatment as droppedOutOfArea.
+  let droppedOffScope = 0;
+  const onScope = inCountry.filter((p) => {
+    if (offScopeType(p.primaryType)) { droppedOffScope++; return false; }
+    return true;
+  });
+
+  const places = onScope.filter((p) => {
     if (!useFilter) return true;
     const county = countyOf(p);
     if (!county) { missingCounty++; return true; }
@@ -148,13 +242,14 @@ export async function searchContractors({ trade, location, apiKey, allowedCounti
     googleMapsUrl: p.googleMapsUri || "",
     types: p.types || [],
     primaryType: p.primaryTypeDisplayName ? p.primaryTypeDisplayName.text : "",
+    primaryTypeRaw: p.primaryType || "",
     hasHours: Boolean(p.regularOpeningHours && p.regularOpeningHours.periods && p.regularOpeningHours.periods.length),
     photoCount: (p.photos || []).length,
     ...summarizePhotos(p.photos, p.displayName ? p.displayName.text : ""),
     ...summarizeReviews(p.reviews),
   }));
 
-  return { results: mapped, droppedOutOfArea, missingCounty };
+  return { results: mapped, droppedOutOfArea, missingCounty, droppedOffScope };
 }
 
 // ─── Photo provenance ─────────────────────────────────────────────────────

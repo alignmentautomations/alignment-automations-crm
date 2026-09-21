@@ -82,7 +82,7 @@ export async function onRequestPost({ request, env }) {
       console.error("service-area lookup failed, filter disabled:", e.message);
     }
 
-    const { results: rawResults, droppedOutOfArea, missingCounty } =
+    const { results: rawResults, droppedOutOfArea, missingCounty, droppedOffScope } =
       await searchContractors({ trade, location, apiKey, allowedCounties });
     // Nothing is excluded on review count. Every business Places returns stays
     // on the list; the ordering decides what makes the cap.
@@ -232,7 +232,7 @@ export async function onRequestPost({ request, env }) {
     return new Response(JSON.stringify({
       added: prospects.length, skipped, thinReviewCount, subrequestsApprox,
       alreadyListed, alreadyContacted, location,
-      droppedOutOfArea, missingCounty,
+      droppedOutOfArea, missingCounty, droppedOffScope,
     }), {
       status: 200, headers: { "Content-Type": "application/json" },
     });
