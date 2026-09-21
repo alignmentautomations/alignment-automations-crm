@@ -2049,9 +2049,15 @@ function DashboardView({ clinics, sequences, onAdd, onEdit, onDelete, onSelect, 
         <div>
           <div className="page-title">Businesses</div>
           <div className="page-subtitle">
-            {clinics.filter(c => !CLOSED_STAGES.has(c.status)).length} active &middot; {clinics.filter(c => (c.followUps||[]).some(f => f.status === "active")).length} with active follow-ups
-            {clinics.filter(c => CLOSED_STAGES.has(c.status)).length > 0 &&
-              <> &middot; {clinics.filter(c => CLOSED_STAGES.has(c.status)).length} closed out</>}
+            {/* Every count here excludes archived rows, so active + closed out +
+                archived adds up to the whole table. Counting by status alone read
+                9 taken-down businesses as "active" because they keep status=lead
+                and only their outreach_stage is Dead - the list hid them and the
+                counter did not, which is how the CRM came to disagree with both
+                Workers & Pages and Web Analytics. */}
+            {clinics.filter(c => !c.archived && !CLOSED_STAGES.has(c.status)).length} active &middot; {clinics.filter(c => !c.archived && (c.followUps||[]).some(f => f.status === "active")).length} with active follow-ups
+            {clinics.filter(c => !c.archived && CLOSED_STAGES.has(c.status)).length > 0 &&
+              <> &middot; {clinics.filter(c => !c.archived && CLOSED_STAGES.has(c.status)).length} closed out</>}
             {archivedCount > 0 && <> &middot; {archivedCount} archived</>}
           </div>
         </div>
