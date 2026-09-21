@@ -2024,8 +2024,17 @@ function DetailPanel({ clinic, sequences, onClose, onUpdate, onPatch, onDelete, 
 function DashboardView({ clinics, sequences, onAdd, onEdit, onDelete, onSelect, onStatusChange, onOpenLaunch }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const [showArchived, setShowArchived] = useState(false);
+
+  const archivedCount = clinics.filter(c => c.archived).length;
 
   const filtered = clinics.filter(c => {
+    // Archived means dead or disqualified. The rows stay in the table on
+    // purpose - the prospector's duplicate check reads contact_phone out of
+    // `clinics`, so removing them would make every business we already ruled
+    // out resurface on the next search. They are hidden here instead, and the
+    // count is shown so they are not forgotten.
+    if (c.archived && !showArchived) return false;
     const q = search.toLowerCase();
     const ms = !q || c.name.toLowerCase().includes(q) || (c.contact_name||"").toLowerCase().includes(q) || (c.contact_email||"").toLowerCase().includes(q);
     // "All" means all ACTIVE businesses. Anything on a `closed` stage is
@@ -2043,6 +2052,7 @@ function DashboardView({ clinics, sequences, onAdd, onEdit, onDelete, onSelect, 
             {clinics.filter(c => !CLOSED_STAGES.has(c.status)).length} active &middot; {clinics.filter(c => (c.followUps||[]).some(f => f.status === "active")).length} with active follow-ups
             {clinics.filter(c => CLOSED_STAGES.has(c.status)).length > 0 &&
               <> &middot; {clinics.filter(c => CLOSED_STAGES.has(c.status)).length} closed out</>}
+            {archivedCount > 0 && <> &middot; {archivedCount} archived</>}
           </div>
         </div>
         <button className="btn-primary header-add-btn" onClick={onAdd}><Ic.Plus /> Add Business</button>
@@ -2057,6 +2067,12 @@ function DashboardView({ clinics, sequences, onAdd, onEdit, onDelete, onSelect, 
             <option value="all">All Statuses</option>
             {PIPELINE_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
+          {archivedCount > 0 && (
+            <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:13, color:"#475569", whiteSpace:"nowrap", cursor:"pointer" }}>
+              <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />
+              Show archived ({archivedCount})
+            </label>
+          )}
         </div>
 
         {/* Desktop table */}
@@ -3383,9 +3399,13 @@ export default function App() {
   const handleStatusChange = useCallback(async (id, newStatus) => {
     const clinic = clinics.find(c => c.id === id);
     const updatedClinic = clinic ? { ...clinic, status: newStatus } : null;
-    setClinics(prev => prev.map(c => c.id === id ? { ...c, status: newStatus } : c));
-    setSelected(sel => sel?.id === id ? { ...sel, status: newStatus } : sel);
-    try { await db.update(id, { status: newStatus }); } catch (_) {}
+    // Screening a business out takes it off the Businesses list in the same
+    // move, and putting it back on an active stage brings it back. The row is
+    // never deleted: the prospector dedupes against clinics.contact_phone.
+    const archived = newStatus === "disqualified" ? 1 : 0;
+    setClinics(prev => prev.map(c => c.id === id ? { ...c, status: newStatus, archived } : c));
+    setSelected(sel => sel?.id === id ? { ...sel, status: newStatus, archived } : sel);
+    try { await db.update(id, { status: newStatus, archived }); } catch (_) {}
 
     // A won deal fires a different onboarding sequence depending on which plan
     // they bought - a Starter Site client has no carrier step and a much

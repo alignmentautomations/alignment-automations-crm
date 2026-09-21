@@ -128,6 +128,11 @@ export async function onRequestPatch({ params, request, env }) {
     if (patch.watched        !== undefined) { updates.push('watched = ?');         values.push(patch.watched ? 1 : 0); }
     if (patch.replied        !== undefined) { updates.push('replied = ?');         values.push(patch.replied ? 1 : 0); }
     if (patch.outreach_stage !== undefined) { updates.push('outreach_stage = ?');  values.push(patch.outreach_stage); }
+    // Archived rows stay in the table - the prospector's duplicate check reads
+    // contact_phone straight out of `clinics`, so deleting a disqualified
+    // business would make it resurface on the next search. This only hides it
+    // from the Businesses list.
+    if (patch.archived       !== undefined) { updates.push('archived = ?');        values.push(patch.archived ? 1 : 0); }
     if (patch.alignmentTasks !== undefined) { updates.push('alignment_tasks = ?'); values.push(JSON.stringify(patch.alignmentTasks)); }
     if (patch.clinicTasks   !== undefined) { updates.push('clinic_tasks = ?');    values.push(JSON.stringify(patch.clinicTasks)); }
     if (patch.followUps     !== undefined) { updates.push('follow_ups = ?');      values.push(JSON.stringify(patch.followUps)); }
