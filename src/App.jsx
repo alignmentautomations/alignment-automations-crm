@@ -261,32 +261,32 @@ const getPriority = id => PRIORITIES.find(p => p.id === id);
 // distinct from INDUSTRIES (the CRM's display labels, which include "Other"
 // with no Places query equivalent). Matches INDUSTRY_MAP in
 // functions/api/_lib/prospecting.js.
-// The value is the phrase sent to Google Places ("{trade} in {location}"), NOT a
-// CSLB classification — the prospector searches Google, not the licence board.
-// Counts below are ACTIVE, unexpired, unflagged licences in San Luis Obispo +
-// Santa Barbara counties, measured from the `licenses` table on 2026-09-09;
-// they are why these trades were chosen and others were not.
+// The value is the phrase sent to Google Places ("{trade} in {location}"), or
+// the key of a merged group that expands to several phrases (TRADE_GROUPS). It
+// is NOT a CSLB classification — the prospector searches Google, not the board.
+// The per-trade counts in the comments are why these trades were chosen and
+// others were not.
 const PROSPECT_TRADES = [
-  // The original six.
-  { value: "painter", label: "Painter" },                          // C-33, 518
-  { value: "hvac contractor", label: "HVAC contractor" },           // C-20, 165
-  { value: "roofer", label: "Roofer" },                             // C-39, 127
-  { value: "plumber", label: "Plumber" },                           // C-36, 465
-  { value: "electrician", label: "Electrician" },                   // C-10, 593
-  { value: "landscaper", label: "Landscaper / lawn care" },         // C-27, 460
-  // Added 2026-09-09. Chosen for fit with the spec-build method: homeowner- or
-  // facility-facing, visual enough that photographs can carry a page, and a
-  // ticket size where a $950 site is obviously worth it.
-  { value: "general contractor", label: "General contractor" },     // B, 2670
-  { value: "home remodeler", label: "Home remodeler" },             // B / B-2
-  { value: "flooring contractor", label: "Flooring" },              // C-15, 186
-  { value: "tile contractor", label: "Tile & stone" },              // C-54, 174
-  { value: "concrete contractor", label: "Concrete & patios" },     // C-8, 156
-  { value: "cabinet maker", label: "Cabinets & millwork" },         // C-6, 142
-  { value: "masonry contractor", label: "Masonry" },                // C-29, 65
-  { value: "swimming pool contractor", label: "Swimming pools" },   // C-53, 58
-  { value: "fence contractor", label: "Fencing" },                  // C-13, 51
-  { value: "tree service", label: "Tree service" },                 // D-49 76 + C-49 13
+  // Merged 2026-09-27 from sixteen to eleven. The pairs below were not
+  // overlapping as LICENCES (tile/flooring share 7% of holders) but as GOOGLE
+  // RESULTS: one query returned largely the same businesses as the other. A
+  // merged choice runs every query in its group and dedupes -- same reach,
+  // fewer picker entries. The groups live in TRADE_GROUPS in
+  // functions/api/_lib/prospecting.js; KEEP THE VALUES IN SYNC.
+  // Licence counts are ACTIVE licences, SLO / SB / Monterey, from the
+  // 2026-09-09 CSLB export.
+  { value: "painter", label: "Painter" },                          // C-33, 235 / 333 / 243
+  { value: "general contractor & remodeling",
+    label: "General contractor & remodeling" },                    // B + C-6 cabinets
+  { value: "flooring & tile", label: "Flooring & tile" },          // C-15 + C-54
+  { value: "concrete & masonry", label: "Concrete & masonry" },    // C-8 + C-29
+  { value: "landscaping & fencing", label: "Landscaping & fencing" }, // C-27 + C-13
+  { value: "roofer", label: "Roofer" },                            // C-39, 54 / 81 / 66
+  { value: "plumber", label: "Plumber" },                          // C-36, 222 / 282 / 200
+  { value: "hvac contractor", label: "HVAC contractor" },           // C-20, 91 / 99 / 78
+  { value: "electrician", label: "Electrician" },                   // C-10, 334 / 311 / 300
+  { value: "swimming pool contractor", label: "Swimming pools" },   // C-53, 28 / 36 / 6 (thin in Monterey)
+  { value: "tree service", label: "Tree service" },                 // D-49, 32 / 50 / 50
 ];
 // DELIBERATELY NOT HERE, and the reasons are worth keeping:
 //   Solar (C-46, 20)  — tiny pool, and the trade is dominated by heavy

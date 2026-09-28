@@ -18,6 +18,7 @@ import {
   runWithConcurrency,
   lookupLicenses,
   phoneDigits,
+  queriesForTrade,
 } from "../_lib/prospecting.js";
 
 const MAX_RESULTS_PER_SEARCH = 10;
@@ -82,8 +83,24 @@ export async function onRequestPost({ request, env }) {
       console.error("service-area lookup failed, filter disabled:", e.message);
     }
 
-    const { results: rawResults, droppedOutOfArea, missingCounty, droppedOffScope } =
-      await searchContractors({ trade, location, apiKey, allowedCounties });
+    // A merged choice ("flooring & tile") runs each of its queries in turn and
+    // dedupes on place_id; a single trade is a group of one, unchanged. Each
+    // result remembers the query that found it -- that is what gets stored as
+    // the prospect's `trade`, so the CRM industry mapping stays exact.
+    const rawResults = [];
+    const seenPlaces = new Set();
+    let droppedOutOfArea = 0, missingCounty = 0, droppedOffScope = 0;
+    for (const query of queriesForTrade(trade)) {
+      const r = await searchContractors({ trade: query, location, apiKey, allowedCounties });
+      droppedOutOfArea += r.droppedOutOfArea;
+      missingCounty += r.missingCounty;
+      droppedOffScope += r.droppedOffScope;
+      for (const p of r.results) {
+        if (seenPlaces.has(p.placeId)) continue;
+        seenPlaces.add(p.placeId);
+        rawResults.push({ ...p, query });
+      }
+    }
     // Nothing is excluded on review count. Every business Places returns stays
     // on the list; the ordering decides what makes the cap.
     const results = rawResults.slice();
@@ -160,7 +177,7 @@ export async function onRequestPost({ request, env }) {
         id: crypto.randomUUID(),
         placeId: result.placeId,
         businessName: result.businessName,
-        trade: trade.toLowerCase(),
+        trade: result.query,
         searchLocation: location,
         address: result.address,
         phone: result.phone,
@@ -225,9 +242,9 @@ export async function onRequestPost({ request, env }) {
       await env.DB.batch(batch);
     }
 
-    // Rough visibility aid, not exact: 1 Places call + up to 2 fetches per new
+    // Rough visibility aid, not exact: 1 Places call per query + up to 2 fetches per new
     // result (homepage + 1 contact-page fallback if no email found on it).
-    const subrequestsApprox = 1 + prospects.length * 2;
+    const subrequestsApprox = queriesForTrade(trade).length + prospects.length * 2;
 
     return new Response(JSON.stringify({
       added: prospects.length, skipped, thinReviewCount, subrequestsApprox,

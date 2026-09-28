@@ -42,7 +42,7 @@ import sys
 
 # Matt works the Central Coast. Widen this list rather than re-importing the
 # whole state: all of California is 243,471 rows, these two counties are ~6,400.
-COUNTIES = {"San Luis Obispo", "Santa Barbara"}
+COUNTIES = {"San Luis Obispo", "Santa Barbara", "Monterey"}   # Monterey added 2026-09-27 (Matt)
 
 DDL = """
 DROP TABLE IF EXISTS licenses;

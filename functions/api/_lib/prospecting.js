@@ -800,6 +800,29 @@ const PRIORITY_MAP = {
   "Park it": "cold",
 };
 
+// ─── Merged trade choices ────────────────────────────────────────────────
+// Added 2026-09-27 on Matt's call: some trades "overlap greatly". Measured
+// first, and the overlap is NOT in the licences -- tile and flooring share
+// only 7% of licence holders, concrete and masonry 3-6% -- it is in GOOGLE:
+// "general contractor" and "home remodeler" return largely the same
+// businesses. So these are merged in the picker, not dropped: one choice runs
+// every query in its group and the results are deduped on place_id. Each
+// prospect row keeps the INDIVIDUAL query it came from as its `trade`, so
+// INDUSTRY_MAP above still labels it correctly and old rows are unaffected.
+// ⚠ Costs one Places call per query in the group. KEEP IN SYNC with
+// PROSPECT_TRADES in src/App.jsx.
+export const TRADE_GROUPS = {
+  "general contractor & remodeling": ["general contractor", "home remodeler", "cabinet maker"],
+  "flooring & tile": ["flooring contractor", "tile contractor"],
+  "concrete & masonry": ["concrete contractor", "masonry contractor"],
+  "landscaping & fencing": ["landscaper", "fence contractor"],
+};
+
+export function queriesForTrade(trade) {
+  const key = (trade || "").toLowerCase();
+  return TRADE_GROUPS[key] || [key];
+}
+
 export function mapIndustry(trade) {
   return INDUSTRY_MAP[(trade || "").toLowerCase()] || "Other";
 }
